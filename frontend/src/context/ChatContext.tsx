@@ -106,7 +106,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const startCall = async (video: boolean) => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video, audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({ video: video ? { facingMode: 'user' } : false, audio: true });
       localStreamRef.current = stream;
       setLocalStream(stream);
       setCallStatus('calling');
@@ -130,7 +130,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const answerCall = async (video: boolean) => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video, audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({ video: video ? { facingMode: 'user' } : false, audio: true });
       localStreamRef.current = stream;
       setLocalStream(stream);
       if (incomingCall) {

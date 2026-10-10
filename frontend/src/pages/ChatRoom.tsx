@@ -224,14 +224,14 @@ const ChatRoom = () => {
       )}
 
       {callStatus === 'connected' && (
-        <div className="bg-slate-900 text-white p-2 flex items-center justify-center gap-4 shadow-inner relative h-48 sm:h-64 shrink-0 overflow-hidden">
-          <div className="relative h-full aspect-video bg-black rounded-lg overflow-hidden border border-slate-700 max-w-full">
+        <div className="bg-slate-900 text-white p-2 flex items-center justify-center gap-4 shadow-inner relative h-[40vh] sm:h-96 shrink-0 overflow-hidden">
+          <div className="relative h-full w-full max-w-2xl bg-black rounded-lg overflow-hidden border border-slate-700">
             <video 
               ref={(v) => { if (v) v.srcObject = remoteStream; }} 
               autoPlay playsInline className="w-full h-full object-cover"
             />
           </div>
-          <div className="absolute bottom-4 right-4 w-24 sm:w-32 aspect-video bg-black rounded-lg overflow-hidden border-2 border-slate-700 shadow-lg z-20">
+          <div className="absolute bottom-4 right-4 w-24 h-36 sm:w-32 sm:h-48 bg-black rounded-lg overflow-hidden border-2 border-slate-700 shadow-lg z-20">
             <video 
               ref={(v) => { if (v) v.srcObject = localStream; }} 
               autoPlay playsInline muted className="w-full h-full object-cover"
