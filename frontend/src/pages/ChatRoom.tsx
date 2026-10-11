@@ -27,6 +27,7 @@ const ChatRoom = () => {
     messages, status, sendMessage, sendFile, disconnect, deleteMessage, 
     isPeerTyping, sendTypingState, localStream, remoteStream, callStatus, callType,
     isAudioMuted, isVideoMuted, isScreenSharing,
+    canSwitchCamera, isMobileDevice, facingMode,
     toggleAudio, toggleVideo, toggleScreenShare, switchCamera,
     startCall, answerCall, rejectCall, terminateCall 
   } = useChat();
@@ -421,7 +422,7 @@ const ChatRoom = () => {
                 autoPlay 
                 playsInline 
                 muted 
-                className={`w-full h-full object-cover ${!isScreenSharing ? '-scale-x-100' : ''}`}
+                className={`w-full h-full object-cover ${facingMode === 'user' && !isScreenSharing ? '-scale-x-100' : ''}`}
               />
               {isVideoMuted && (
                 <div className="absolute inset-0 bg-slate-950/85 backdrop-blur-xs flex flex-col items-center justify-center text-slate-400 text-xs gap-1">
@@ -466,29 +467,33 @@ const ChatRoom = () => {
                 {isVideoMuted ? <VideoOff size={18} /> : <Video size={18} />}
               </button>
 
-              {/* Switch / Flip Camera (MOBILE ONLY - hidden on laptop/desktop) */}
-              <button
-                type="button"
-                onClick={switchCamera}
-                title="Switch Camera (Front / Back)"
-                className="flex md:hidden p-2 sm:p-2.5 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-white transition active:scale-95 items-center justify-center"
-              >
-                <RefreshCw size={18} />
-              </button>
+              {/* Switch / Flip Camera (MOBILE ONLY - strictly hidden on laptop/desktop) */}
+              {canSwitchCamera && (
+                <button
+                  type="button"
+                  onClick={switchCamera}
+                  title="Switch Camera (Front / Back)"
+                  className="p-2 sm:p-2.5 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-white transition active:scale-95 flex items-center justify-center"
+                >
+                  <RefreshCw size={18} />
+                </button>
+              )}
 
-              {/* Screen Share (Desktop / Laptop only - hidden on mobile) */}
-              <button
-                type="button"
-                onClick={toggleScreenShare}
-                title={isScreenSharing ? "Stop Sharing Screen" : "Share Screen"}
-                className={`hidden md:flex p-2 sm:p-2.5 rounded-xl transition ${
-                  isScreenSharing 
-                    ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30' 
-                    : 'bg-slate-800/90 hover:bg-slate-700 text-white'
-                }`}
-              >
-                <Monitor size={18} />
-              </button>
+              {/* Screen Share (Desktop / Laptop only - strictly hidden on mobile) */}
+              {!isMobileDevice && (
+                <button
+                  type="button"
+                  onClick={toggleScreenShare}
+                  title={isScreenSharing ? "Stop Sharing Screen" : "Share Screen"}
+                  className={`p-2 sm:p-2.5 rounded-xl transition flex items-center justify-center ${
+                    isScreenSharing 
+                      ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30' 
+                      : 'bg-slate-800/90 hover:bg-slate-700 text-white'
+                  }`}
+                >
+                  <Monitor size={18} />
+                </button>
+              )}
 
               {/* End Call */}
               <button

@@ -38,6 +38,9 @@ interface ChatContextType {
   isAudioMuted: boolean;
   isVideoMuted: boolean;
   isScreenSharing: boolean;
+  canSwitchCamera: boolean;
+  isMobileDevice: boolean;
+  facingMode: 'user' | 'environment';
   toggleAudio: () => void;
   toggleVideo: () => void;
   toggleScreenShare: () => Promise<void>;
@@ -103,6 +106,48 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const localStreamRef = useRef<MediaStream | null>(null);
   const screenStreamRef = useRef<MediaStream | null>(null);
 
+  // Check whether client is running on a real mobile device (phone / tablet)
+  const isMobileDevice = typeof window !== 'undefined' && (
+    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile/i.test(navigator.userAgent || '') ||
+    (('maxTouchPoints' in navigator) && navigator.maxTouchPoints > 1 && /Macintosh/i.test(navigator.userAgent || ''))
+  );
+
+  // Laptops/Desktops NEVER have flip camera button (always false)
+  // Mobile devices default to true unless device enumeration confirms single camera
+  const [canSwitchCamera, setCanSwitchCamera] = useState<boolean>(() => {
+    if (!isMobileDevice) return false;
+    return true;
+  });
+
+  useEffect(() => {
+    if (!isMobileDevice) {
+      setCanSwitchCamera(false);
+      return;
+    }
+    const checkCameras = async () => {
+      try {
+        if (navigator.mediaDevices?.enumerateDevices) {
+          const devices = await navigator.mediaDevices.enumerateDevices();
+          const videoInputs = devices.filter(d => d.kind === 'videoinput');
+          // If 0 devices returned, permission not yet granted; allow switch button on mobile.
+          // If >= 2 devices returned, multiple cameras confirmed.
+          if (videoInputs.length >= 2 || videoInputs.length === 0) {
+            setCanSwitchCamera(true);
+          } else {
+            setCanSwitchCamera(false);
+          }
+        }
+      } catch {
+        setCanSwitchCamera(true);
+      }
+    };
+    checkCameras();
+    navigator.mediaDevices?.addEventListener?.('devicechange', checkCameras);
+    return () => {
+      navigator.mediaDevices?.removeEventListener?.('devicechange', checkCameras);
+    };
+  }, [isMobileDevice]);
+
   const toggleAudio = () => {
     if (localStreamRef.current) {
       const audioTrack = localStreamRef.current.getAudioTracks()[0];
@@ -126,34 +171,138 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const switchCamera = async () => {
     if (!localStreamRef.current) return;
     try {
-      const nextMode = facingMode === 'user' ? 'environment' : 'user';
-      let newStream: MediaStream;
+      const nextFacing = facingMode === 'user' ? 'environment' : 'user';
+
+      // 1. Enumerate available video inputs to locate target deviceId if available
+      let targetDeviceId: string | undefined;
       try {
-        newStream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { exact: nextMode } },
-          audio: false
-        });
-      } catch {
-        newStream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: nextMode },
-          audio: false
-        });
+        if (navigator.mediaDevices?.enumerateDevices) {
+          const devices = await navigator.mediaDevices.enumerateDevices();
+          const videoInputs = devices.filter(d => d.kind === 'videoinput');
+
+          if (videoInputs.length > 1) {
+            const currentTrack = localStreamRef.current.getVideoTracks()[0];
+            const currentDeviceId = currentTrack?.getSettings?.().deviceId;
+
+            if (nextFacing === 'environment') {
+              // Search for back / rear / environment camera
+              const backCam = videoInputs.find(d => {
+                const label = (d.label || '').toLowerCase();
+                return (label.includes('back') || label.includes('rear') || label.includes('environment')) && d.deviceId !== currentDeviceId;
+              }) || videoInputs.find(d => d.deviceId !== currentDeviceId);
+              if (backCam) targetDeviceId = backCam.deviceId;
+            } else {
+              // Search for front / user / selfie camera
+              const frontCam = videoInputs.find(d => {
+                const label = (d.label || '').toLowerCase();
+                return (label.includes('front') || label.includes('user') || label.includes('selfie') || label.includes('facetime')) && d.deviceId !== currentDeviceId;
+              }) || videoInputs.find(d => d.deviceId !== currentDeviceId);
+              if (frontCam) targetDeviceId = frontCam.deviceId;
+            }
+          }
+        }
+      } catch (enumErr) {
+        console.warn('Camera enumeration error during switch:', enumErr);
       }
-      const newVideoTrack = newStream.getVideoTracks()[0];
+
+      // 2. STOP and remove old video track BEFORE acquiring new camera!
+      // This is crucial on mobile devices (Android/iOS) because the mobile camera hardware
+      // locks the video pipeline and will reject or ignore new camera requests while the old track runs.
       const oldVideoTrack = localStreamRef.current.getVideoTracks()[0];
       if (oldVideoTrack) {
         localStreamRef.current.removeTrack(oldVideoTrack);
         oldVideoTrack.stop();
       }
-      localStreamRef.current.addTrack(newVideoTrack);
-      const sender = currentCallRef.current?.peerConnection?.getSenders()?.find((s: any) => s.track?.kind === 'video');
-      if (sender) {
-        await sender.replaceTrack(newVideoTrack);
+
+      // 3. Acquire new camera stream with fallback ladder
+      let newStream: MediaStream | null = null;
+
+      // Attempt A: target deviceId exact
+      if (targetDeviceId) {
+        try {
+          newStream = await navigator.mediaDevices.getUserMedia({
+            video: { deviceId: { exact: targetDeviceId } },
+            audio: false
+          });
+        } catch (e1) {
+          console.warn('Switch failed with exact deviceId, trying exact facingMode:', e1);
+        }
       }
-      setFacingMode(nextMode);
+
+      // Attempt B: exact facingMode
+      if (!newStream) {
+        try {
+          newStream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: { exact: nextFacing } },
+            audio: false
+          });
+        } catch (e2) {
+          console.warn('Switch failed with exact facingMode, trying ideal facingMode:', e2);
+        }
+      }
+
+      // Attempt C: ideal facingMode
+      if (!newStream) {
+        try {
+          newStream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: nextFacing },
+            audio: false
+          });
+        } catch (e3) {
+          console.warn('Switch failed with ideal facingMode, trying basic video:', e3);
+        }
+      }
+
+      // Attempt D: fallback to any available video track
+      if (!newStream) {
+        newStream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: false
+        });
+      }
+
+      const newVideoTrack = newStream.getVideoTracks()[0];
+      if (!newVideoTrack) {
+        throw new Error('No video track returned from camera switch');
+      }
+
+      // Respect current video muted state
+      if (isVideoMuted) {
+        newVideoTrack.enabled = false;
+      }
+
+      // Add new track to existing local stream
+      localStreamRef.current.addTrack(newVideoTrack);
+
+      // Replace video track in WebRTC peer connection sender
+      if (currentCallRef.current?.peerConnection) {
+        const senders = currentCallRef.current.peerConnection.getSenders() || [];
+        const videoSender = senders.find((s: any) => s.track?.kind === 'video' || s.kind === 'video');
+        if (videoSender) {
+          await videoSender.replaceTrack(newVideoTrack);
+        }
+      }
+
+      setFacingMode(nextFacing);
       setLocalStream(new MediaStream(localStreamRef.current.getTracks()));
     } catch (err) {
-      console.warn('Switch camera error:', err);
+      console.error('Switch camera error:', err);
+      // Emergency recovery if camera stopped and failed to switch
+      try {
+        const recoveryStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        const recTrack = recoveryStream.getVideoTracks()[0];
+        if (recTrack && localStreamRef.current) {
+          localStreamRef.current.addTrack(recTrack);
+          const senders = currentCallRef.current?.peerConnection?.getSenders() || [];
+          const videoSender = senders.find((s: any) => s.track?.kind === 'video' || s.kind === 'video');
+          if (videoSender) {
+            await videoSender.replaceTrack(recTrack);
+          }
+          setLocalStream(new MediaStream(localStreamRef.current.getTracks()));
+        }
+      } catch (recErr) {
+        console.error('Failed to recover camera track:', recErr);
+      }
     }
   };
 
@@ -241,6 +390,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setRemoteStream(null);
     setCallStatus('idle');
     setIncomingCall(null);
+    setFacingMode('user');
     if (currentCallRef.current) {
       currentCallRef.current.close();
       currentCallRef.current = null;
@@ -533,6 +683,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       initHost, initGuest, disconnect, pin, isPeerTyping, sendTypingState,
       localStream, remoteStream, callStatus, callType,
       isAudioMuted, isVideoMuted, isScreenSharing,
+      canSwitchCamera, isMobileDevice, facingMode,
       toggleAudio, toggleVideo, toggleScreenShare, switchCamera,
       startCall, answerCall, rejectCall, endCall, terminateCall
     }}>
