@@ -171,89 +171,89 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const switchCamera = async () => {
     if (!localStreamRef.current) return;
     try {
-      const nextFacing = facingMode === 'user' ? 'environment' : 'user';
+      const nextFacing: 'user' | 'environment' = facingMode === 'user' ? 'environment' : 'user';
 
-      // 1. Enumerate available video inputs to locate target deviceId if available
-      let targetDeviceId: string | undefined;
-      try {
-        if (navigator.mediaDevices?.enumerateDevices) {
-          const devices = await navigator.mediaDevices.enumerateDevices();
-          const videoInputs = devices.filter(d => d.kind === 'videoinput');
+      // 1. STOP and release existing video tracks FIRST
+      // Crucial on Android/iOS because the mobile camera HAL holds exclusive hardware lock.
+      const oldVideoTracks = localStreamRef.current.getVideoTracks();
+      oldVideoTracks.forEach(track => {
+        track.stop();
+        localStreamRef.current?.removeTrack(track);
+      });
 
-          if (videoInputs.length > 1) {
-            const currentTrack = localStreamRef.current.getVideoTracks()[0];
-            const currentDeviceId = currentTrack?.getSettings?.().deviceId;
+      // 2. Allow 100ms for mobile camera hardware to fully release
+      await new Promise(resolve => setTimeout(resolve, 100));
 
-            if (nextFacing === 'environment') {
-              // Search for back / rear / environment camera
-              const backCam = videoInputs.find(d => {
-                const label = (d.label || '').toLowerCase();
-                return (label.includes('back') || label.includes('rear') || label.includes('environment')) && d.deviceId !== currentDeviceId;
-              }) || videoInputs.find(d => d.deviceId !== currentDeviceId);
-              if (backCam) targetDeviceId = backCam.deviceId;
-            } else {
-              // Search for front / user / selfie camera
-              const frontCam = videoInputs.find(d => {
-                const label = (d.label || '').toLowerCase();
-                return (label.includes('front') || label.includes('user') || label.includes('selfie') || label.includes('facetime')) && d.deviceId !== currentDeviceId;
-              }) || videoInputs.find(d => d.deviceId !== currentDeviceId);
-              if (frontCam) targetDeviceId = frontCam.deviceId;
-            }
-          }
-        }
-      } catch (enumErr) {
-        console.warn('Camera enumeration error during switch:', enumErr);
-      }
-
-      // 2. STOP and remove old video track BEFORE acquiring new camera!
-      // This is crucial on mobile devices (Android/iOS) because the mobile camera hardware
-      // locks the video pipeline and will reject or ignore new camera requests while the old track runs.
-      const oldVideoTrack = localStreamRef.current.getVideoTracks()[0];
-      if (oldVideoTrack) {
-        localStreamRef.current.removeTrack(oldVideoTrack);
-        oldVideoTrack.stop();
-      }
-
-      // 3. Acquire new camera stream with fallback ladder
       let newStream: MediaStream | null = null;
+      let usedFacing: 'user' | 'environment' = nextFacing;
 
-      // Attempt A: target deviceId exact
-      if (targetDeviceId) {
-        try {
-          newStream = await navigator.mediaDevices.getUserMedia({
-            video: { deviceId: { exact: targetDeviceId } },
-            audio: false
-          });
-        } catch (e1) {
-          console.warn('Switch failed with exact deviceId, trying exact facingMode:', e1);
-        }
+      // 3. Attempt 1: Standard W3C ideal facingMode (official method across Android Chrome & iOS Safari)
+      try {
+        newStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: nextFacing } },
+          audio: false
+        });
+      } catch (err1) {
+        console.warn('Switch failed with facingMode ideal, trying loose facingMode:', err1);
       }
 
-      // Attempt B: exact facingMode
-      if (!newStream) {
-        try {
-          newStream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: { exact: nextFacing } },
-            audio: false
-          });
-        } catch (e2) {
-          console.warn('Switch failed with exact facingMode, trying ideal facingMode:', e2);
-        }
-      }
-
-      // Attempt C: ideal facingMode
+      // 4. Attempt 2: Loose facingMode string constraint
       if (!newStream) {
         try {
           newStream = await navigator.mediaDevices.getUserMedia({
             video: { facingMode: nextFacing },
             audio: false
           });
-        } catch (e3) {
-          console.warn('Switch failed with ideal facingMode, trying basic video:', e3);
+        } catch (err2) {
+          console.warn('Switch failed with loose facingMode, trying exact facingMode:', err2);
         }
       }
 
-      // Attempt D: fallback to any available video track
+      // 5. Attempt 3: Exact facingMode
+      if (!newStream) {
+        try {
+          newStream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: { exact: nextFacing } },
+            audio: false
+          });
+        } catch (err3) {
+          console.warn('Switch failed with exact facingMode:', err3);
+        }
+      }
+
+      // 6. Attempt 4: If facingMode failed, cycle to candidate camera deviceId via enumerateDevices
+      if (!newStream && navigator.mediaDevices?.enumerateDevices) {
+        try {
+          const devices = await navigator.mediaDevices.enumerateDevices();
+          const videoInputs = devices.filter(d => d.kind === 'videoinput');
+
+          if (videoInputs.length > 1) {
+            let targetDevice = videoInputs.find(d => {
+              const label = (d.label || '').toLowerCase();
+              if (nextFacing === 'environment') {
+                return label.includes('back') || label.includes('rear') || label.includes('environment') || label.includes('0');
+              } else {
+                return label.includes('front') || label.includes('user') || label.includes('selfie') || label.includes('1');
+              }
+            });
+
+            if (!targetDevice) {
+              targetDevice = nextFacing === 'environment' ? videoInputs[1] : videoInputs[0];
+            }
+
+            if (targetDevice?.deviceId) {
+              newStream = await navigator.mediaDevices.getUserMedia({
+                video: { deviceId: { exact: targetDevice.deviceId } },
+                audio: false
+              });
+            }
+          }
+        } catch (enumErr) {
+          console.warn('Enumeration switch error:', enumErr);
+        }
+      }
+
+      // 7. Attempt 5: Fallback to basic video if all above failed
       if (!newStream) {
         newStream = await navigator.mediaDevices.getUserMedia({
           video: true,
@@ -263,18 +263,18 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       const newVideoTrack = newStream.getVideoTracks()[0];
       if (!newVideoTrack) {
-        throw new Error('No video track returned from camera switch');
+        throw new Error('Could not obtain new video track from camera');
       }
 
-      // Respect current video muted state
+      // Maintain muted state if user had muted video
       if (isVideoMuted) {
         newVideoTrack.enabled = false;
       }
 
-      // Add new track to existing local stream
+      // Attach new video track to local stream
       localStreamRef.current.addTrack(newVideoTrack);
 
-      // Replace video track in WebRTC peer connection sender
+      // Replace track on WebRTC peer connection sender so remote peer sees the new camera
       if (currentCallRef.current?.peerConnection) {
         const senders = currentCallRef.current.peerConnection.getSenders() || [];
         const videoSender = senders.find((s: any) => s.track?.kind === 'video' || s.kind === 'video');
@@ -283,11 +283,18 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       }
 
-      setFacingMode(nextFacing);
-      setLocalStream(new MediaStream(localStreamRef.current.getTracks()));
-    } catch (err) {
-      console.error('Switch camera error:', err);
-      // Emergency recovery if camera stopped and failed to switch
+      const trackSettings = newVideoTrack.getSettings?.();
+      if (trackSettings?.facingMode === 'user' || trackSettings?.facingMode === 'environment') {
+        usedFacing = trackSettings.facingMode;
+      }
+
+      setFacingMode(usedFacing);
+      const updatedStream = new MediaStream(localStreamRef.current.getTracks());
+      localStreamRef.current = updatedStream;
+      setLocalStream(updatedStream);
+    } catch (err: any) {
+      console.error('Fatal switchCamera error:', err);
+      // Try to recover any video track
       try {
         const recoveryStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
         const recTrack = recoveryStream.getVideoTracks()[0];
@@ -298,7 +305,9 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (videoSender) {
             await videoSender.replaceTrack(recTrack);
           }
-          setLocalStream(new MediaStream(localStreamRef.current.getTracks()));
+          const recStream = new MediaStream(localStreamRef.current.getTracks());
+          localStreamRef.current = recStream;
+          setLocalStream(recStream);
         }
       } catch (recErr) {
         console.error('Failed to recover camera track:', recErr);

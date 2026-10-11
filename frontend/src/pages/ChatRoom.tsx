@@ -49,6 +49,7 @@ const ChatRoom = () => {
   const [mobileTab, setMobileTab] = useState<'split' | 'video' | 'chat'>('split');
   const [videoFit, setVideoFit] = useState<'contain' | 'cover'>('contain');
   const [wasConnected, setWasConnected] = useState(false);
+  const [isSwapped, setIsSwapped] = useState(false);
 
   useEffect(() => {
     if (status === 'connected') {
@@ -74,24 +75,43 @@ const ChatRoom = () => {
     }
   }, [messages]);
 
-  // Connect video and audio streams
+  // Connect main video and audio streams
   useEffect(() => {
-    if (remoteVideoRef.current && remoteStream) {
-      remoteVideoRef.current.srcObject = remoteStream;
-      remoteVideoRef.current.play().catch(e => console.warn('Remote video play error:', e));
+    const mainEl = remoteVideoRef.current;
+    if (mainEl) {
+      const activeStream = (isSwapped || !remoteStream) ? localStream : remoteStream;
+      if (activeStream) {
+        if (mainEl.srcObject !== activeStream) {
+          mainEl.srcObject = null;
+          mainEl.srcObject = activeStream;
+          mainEl.play().catch(e => console.warn('Main video play error:', e));
+        }
+      } else {
+        mainEl.srcObject = null;
+      }
     }
     if (remoteAudioRef.current && remoteStream) {
       remoteAudioRef.current.srcObject = remoteStream;
       remoteAudioRef.current.play().catch(e => console.warn('Remote audio play error:', e));
     }
-  }, [remoteStream, callStatus]);
+  }, [remoteStream, localStream, callStatus, isSwapped, facingMode]);
 
+  // Connect corner PiP video stream
   useEffect(() => {
-    if (localVideoRef.current && localStream) {
-      localVideoRef.current.srcObject = localStream;
-      localVideoRef.current.play().catch(e => console.warn('Local video play error:', e));
+    const pipEl = localVideoRef.current;
+    if (pipEl && remoteStream) {
+      const pipStream = isSwapped ? remoteStream : localStream;
+      if (pipStream) {
+        if (pipEl.srcObject !== pipStream) {
+          pipEl.srcObject = null;
+          pipEl.srcObject = pipStream;
+          pipEl.play().catch(e => console.warn('PiP video play error:', e));
+        }
+      } else {
+        pipEl.srcObject = null;
+      }
     }
-  }, [localStream, callStatus]);
+  }, [remoteStream, localStream, callStatus, isSwapped, facingMode]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop: (acceptedFiles) => {
@@ -337,33 +357,30 @@ const ChatRoom = () => {
               mobileTab === 'video' ? 'flex-1 w-full h-full' : mobileTab === 'split' ? 'w-full h-[38vh] sm:h-[44vh] shrink-0 lg:flex-1 lg:h-full' : 'flex-1 w-full h-full'
             }`}
           >
-            {/* Main Remote Video (Peer) */}
+            {/* Main Video View: Displays peer stream when connected, or local camera preview while calling/waiting */}
             <div className="absolute inset-0 w-full h-full bg-slate-950 flex items-center justify-center overflow-hidden">
               <video 
                 ref={(el) => {
                   remoteVideoRef.current = el;
-                  if (el && remoteStream && el.srcObject !== remoteStream) {
-                    el.srcObject = remoteStream;
+                  const activeStream = (isSwapped || !remoteStream) ? localStream : remoteStream;
+                  if (el && activeStream && el.srcObject !== activeStream) {
+                    el.srcObject = activeStream;
                     el.play().catch(() => {});
                   }
                 }}
                 autoPlay 
                 playsInline 
-                className={`w-full h-full ${videoFit === 'contain' ? 'object-contain' : 'object-cover'} transition-all duration-200`}
+                muted={isSwapped || !remoteStream}
+                className={`w-full h-full ${videoFit === 'contain' ? 'object-contain' : 'object-cover'} transition-all duration-200 ${
+                  (isSwapped || !remoteStream) && facingMode === 'user' && !isScreenSharing ? '-scale-x-100' : ''
+                }`}
               />
 
-              {/* Fallback / Connecting State */}
+              {/* Status Banner when peer stream is not yet active */}
               {(!remoteStream || callStatus === 'calling') && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 text-center p-6 bg-slate-950/90 z-10">
-                  <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-slate-900 border-2 border-emerald-500/50 flex items-center justify-center text-emerald-400 shadow-2xl animate-pulse">
-                    <Video size={32} />
-                  </div>
-                  <div>
-                    <p className="text-sm sm:text-base font-bold text-white">
-                      {callStatus === 'calling' ? 'Calling Anonymous Peer...' : 'Connecting Video Feed...'}
-                    </p>
-                    <p className="text-[11px] text-slate-400 mt-1">End-to-End Encrypted WebRTC Tunnel</p>
-                  </div>
+                <div className="absolute top-16 left-1/2 -translate-x-1/2 flex items-center gap-2 px-3.5 py-1.5 bg-black/70 backdrop-blur-md rounded-full text-xs text-white font-medium shadow-2xl z-20 border border-white/10 pointer-events-none">
+                  <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                  <span>{callStatus === 'calling' ? 'Calling Peer... (Camera Preview Active)' : 'Camera Preview Active (Waiting for Peer)'}</span>
                 </div>
               )}
             </div>
@@ -399,41 +416,48 @@ const ChatRoom = () => {
               </button>
             </div>
 
-            {/* BOTTOM-RIGHT OVERLAY: WhatsApp Style Inset Self Video ("My Side Video") */}
-            <div 
-              style={{
-                position: 'absolute',
-                zIndex: 35,
-              }}
-              className={`${
-                mobileTab === 'split' 
-                  ? 'bottom-16 right-2 w-20' 
-                  : 'bottom-20 right-3 w-24 sm:w-28'
-              } lg:bottom-6 lg:right-6 md:w-36 lg:w-44 aspect-[9/16] rounded-2xl overflow-hidden border-2 border-slate-700/80 shadow-2xl bg-slate-950 group transition-all`}
-            >
-              <video 
-                ref={(el) => {
-                  localVideoRef.current = el;
-                  if (el && localStream && el.srcObject !== localStream) {
-                    el.srcObject = localStream;
-                    el.play().catch(() => {});
-                  }
+            {/* BOTTOM-RIGHT OVERLAY: WhatsApp Style Inset PiP Video (Visible when remote peer is streaming) */}
+            {remoteStream && (
+              <div 
+                onClick={() => setIsSwapped(prev => !prev)}
+                title="Tap to switch video view"
+                style={{
+                  position: 'absolute',
+                  zIndex: 35,
                 }}
-                autoPlay 
-                playsInline 
-                muted 
-                className={`w-full h-full object-cover ${facingMode === 'user' && !isScreenSharing ? '-scale-x-100' : ''}`}
-              />
-              {isVideoMuted && (
-                <div className="absolute inset-0 bg-slate-950/85 backdrop-blur-xs flex flex-col items-center justify-center text-slate-400 text-xs gap-1">
-                  <VideoOff size={18} />
-                  <span className="text-[9px]">Camera Off</span>
+                className={`${
+                  mobileTab === 'split' 
+                    ? 'bottom-16 right-2 w-20' 
+                    : 'bottom-20 right-3 w-24 sm:w-28'
+                } lg:bottom-6 lg:right-6 md:w-36 lg:w-44 aspect-[9/16] rounded-2xl overflow-hidden border-2 border-emerald-500/50 hover:border-emerald-400 shadow-2xl bg-slate-950 group transition-all cursor-pointer`}
+              >
+                <video 
+                  ref={(el) => {
+                    localVideoRef.current = el;
+                    const pipStream = isSwapped ? remoteStream : localStream;
+                    if (el && pipStream && el.srcObject !== pipStream) {
+                      el.srcObject = pipStream;
+                      el.play().catch(() => {});
+                    }
+                  }}
+                  autoPlay 
+                  playsInline 
+                  muted={!isSwapped}
+                  className={`w-full h-full object-cover ${
+                    !isSwapped && facingMode === 'user' && !isScreenSharing ? '-scale-x-100' : ''
+                  }`}
+                />
+                {isVideoMuted && !isSwapped && (
+                  <div className="absolute inset-0 bg-slate-950/85 backdrop-blur-xs flex flex-col items-center justify-center text-slate-400 text-xs gap-1">
+                    <VideoOff size={18} />
+                    <span className="text-[9px]">Camera Off</span>
+                  </div>
+                )}
+                <div className="absolute bottom-1 right-1.5 px-1.5 py-0.5 rounded bg-black/70 backdrop-blur-xs text-[9px] text-slate-200 font-medium tracking-wide">
+                  {isSwapped ? 'Peer' : `You ${isAudioMuted ? '(Muted)' : ''}`}
                 </div>
-              )}
-              <div className="absolute bottom-1 right-1.5 px-1.5 py-0.5 rounded bg-black/70 backdrop-blur-xs text-[9px] text-slate-200 font-medium tracking-wide">
-                You {isAudioMuted ? '(Muted)' : ''}
               </div>
-            </div>
+            )}
 
             {/* BOTTOM-CENTER OVERLAY: Floating Call Controls Dock */}
             <div className={`absolute ${
