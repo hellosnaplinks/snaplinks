@@ -1,7 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, Paperclip, Lock, LogOut, FileIcon, Mic, Square, Check, CheckCheck, Trash2, Reply, X, Phone, Video, PhoneOff } from 'lucide-react';
+import { 
+  Send, Paperclip, Lock, LogOut, FileIcon, Mic, MicOff, Square, 
+  Check, CheckCheck, Trash2, Reply, X, Phone, Video, VideoOff, 
+  PhoneOff, Monitor 
+} from 'lucide-react';
 import { useChat } from '../context/ChatContext';
 import { useDropzone } from 'react-dropzone';
 
@@ -19,9 +23,16 @@ const ChatRoom = () => {
     sessionStorage.setItem('snaplinks_timer', chatTimeLeft.toString());
   }, [chatTimeLeft]);
   
-  const { messages, status, sendMessage, sendFile, disconnect, deleteMessage, isPeerTyping, sendTypingState, localStream, remoteStream, callStatus, startCall, answerCall, rejectCall, terminateCall } = useChat();
-    const [replyingTo, setReplyingTo] = useState<any>(null);
-    const typingTimeoutRef = useRef<any>(null);
+  const { 
+    messages, status, sendMessage, sendFile, disconnect, deleteMessage, 
+    isPeerTyping, sendTypingState, localStream, remoteStream, callStatus, callType,
+    isAudioMuted, isVideoMuted, isScreenSharing,
+    toggleAudio, toggleVideo, toggleScreenShare,
+    startCall, answerCall, rejectCall, terminateCall 
+  } = useChat();
+
+  const [replyingTo, setReplyingTo] = useState<any>(null);
+  const typingTimeoutRef = useRef<any>(null);
   const navigate = useNavigate();
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -29,6 +40,9 @@ const ChatRoom = () => {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const remoteVideoRef = useRef<HTMLVideoElement>(null);
+  const localVideoRef = useRef<HTMLVideoElement>(null);
 
   const [wasConnected, setWasConnected] = useState(false);
 
@@ -55,6 +69,21 @@ const ChatRoom = () => {
       });
     }
   }, [messages]);
+
+  // Connect video streams to DOM video elements
+  useEffect(() => {
+    if (remoteVideoRef.current && remoteStream) {
+      remoteVideoRef.current.srcObject = remoteStream;
+      remoteVideoRef.current.play().catch(e => console.warn('Remote video play error:', e));
+    }
+  }, [remoteStream, callStatus]);
+
+  useEffect(() => {
+    if (localVideoRef.current && localStream) {
+      localVideoRef.current.srcObject = localStream;
+      localVideoRef.current.play().catch(e => console.warn('Local video play error:', e));
+    }
+  }, [localStream, callStatus]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop: (acceptedFiles) => {
@@ -154,276 +183,487 @@ const ChatRoom = () => {
     };
   }, []);
 
+  const isVideoCallActive = (callStatus === 'connected' || callStatus === 'calling') && callType === 'video';
+
   return (
-    <div className="fixed top-0 left-0 right-0 h-[100dvh] flex flex-col overflow-hidden max-w-5xl w-full mx-auto p-0 sm:p-4 md:p-6 pt-[72px] sm:pt-[104px] md:pt-[120px] bg-slate-50 dark:bg-slate-900 z-40" {...getRootProps({ onClick: e => e.stopPropagation() })}>
+    <div className="fixed top-0 left-0 right-0 bottom-0 pt-20 sm:pt-24 pb-3 sm:pb-4 px-2 sm:px-4 md:px-6 bg-slate-100 dark:bg-[#0b1329] z-40 flex flex-col overflow-hidden" {...getRootProps({ onClick: e => e.stopPropagation() })}>
       <input {...getInputProps()} />
-      {/* Header */}
-      <header className="bg-white dark:bg-slate-800 sm:border-x sm:border-t border-b sm:border-b-0 border-slate-200 dark:border-slate-700 sm:rounded-t-2xl p-3 sm:p-4 flex items-center justify-between z-10 shadow-sm shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-slate-100 dark:bg-slate-700 rounded-full flex items-center justify-center text-slate-500 dark:text-slate-300">
-            <Lock size={18} />
-          </div>
-          <div>
-            <h2 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
-              Anonymous Peer
-            </h2>
-            {status === 'connected' ? (
-              <p className="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 dark:bg-emerald-400"></span> Connected Securely
-                <span className="text-slate-400 dark:text-slate-500 ml-2 font-mono">
-                  {Math.floor(chatTimeLeft / 60)}:{(chatTimeLeft % 60).toString().padStart(2, '0')} remaining
-                </span>
-              </p>
-            ) : (
-              <p className="text-xs text-amber-500 flex items-center gap-1 animate-pulse">
-                <span className="w-2 h-2 rounded-full bg-amber-500"></span> Reconnecting...
-                <span className="text-slate-400 dark:text-slate-500 ml-2 font-mono">
-                  {Math.floor(chatTimeLeft / 60)}:{(chatTimeLeft % 60).toString().padStart(2, '0')} remaining
-                </span>
-              </p>
-            )}
-          </div>
-        </div>
-                <div className="flex items-center gap-1 sm:gap-2">
-          {callStatus === 'idle' && (
-            <>
-              <button onClick={() => startCall(false)} className="p-2 text-slate-500 hover:text-emerald-500 transition" title="Voice Call"><Phone size={20} /></button>
-              <button onClick={() => startCall(true)} className="p-2 text-slate-500 hover:text-emerald-500 transition" title="Video Call"><Video size={20} /></button>
-            </>
-          )}
-                    {callStatus === 'calling' && (
-            <div className="flex items-center gap-1 bg-amber-50 dark:bg-amber-500/10 rounded-full px-2 py-1">
-              <span className="text-xs font-bold text-amber-500 animate-pulse px-2">Calling...</span>
-              <button type="button" onClick={terminateCall} className="p-1.5 bg-red-100 text-red-500 rounded-full hover:bg-red-200 transition" title="Cancel Call">
-                <PhoneOff size={14} />
-              </button>
+
+      {/* INCOMING CALL MODAL */}
+      <AnimatePresence>
+        {callStatus === 'receiving' && (
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.9, y: 20 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+          >
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl rounded-3xl p-6 flex flex-col items-center gap-5 w-full max-w-sm text-center">
+              <div className="w-16 h-16 bg-emerald-500/10 text-emerald-500 rounded-2xl flex items-center justify-center shadow-inner animate-bounce">
+                <Phone size={32} />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-slate-900 dark:text-white">Incoming Call...</h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Anonymous Peer is calling you securely</p>
+              </div>
+              <div className="flex gap-3 w-full mt-2">
+                <button 
+                  type="button"
+                  onClick={() => rejectCall()} 
+                  className="flex-1 py-3 bg-red-100 hover:bg-red-200 dark:bg-red-500/20 dark:hover:bg-red-500/30 text-red-600 dark:text-red-400 rounded-xl transition font-medium text-sm flex items-center justify-center gap-1.5"
+                >
+                  <PhoneOff size={16} /> Decline
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => answerCall(false)} 
+                  className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-900 dark:text-white rounded-xl transition font-medium text-sm flex items-center justify-center gap-1.5"
+                >
+                  <Phone size={16} /> Audio
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => answerCall(true)} 
+                  className="flex-1 py-3 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white rounded-xl transition font-semibold text-sm flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-500/30"
+                >
+                  <Video size={16} /> Video
+                </button>
+              </div>
             </div>
-          )}
-          <button 
-            onClick={handleLeave}
-          className="p-2 text-slate-500 hover:text-red-500 dark:text-slate-400 dark:hover:text-red-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition"
-          title="Leave Chat"
-        >
-          <LogOut size={20} />
-        </button>
-        </div>
-      </header>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-            {callStatus === 'receiving' && (
-        <div className="absolute top-20 left-1/2 -translate-x-1/2 bg-white dark:bg-slate-800 shadow-2xl border border-slate-200 dark:border-slate-700 rounded-2xl p-4 z-50 flex flex-col items-center gap-4 w-[90%] max-w-sm">
-          <div className="w-12 h-12 bg-emerald-500/10 text-emerald-500 rounded-full flex items-center justify-center animate-bounce">
-            <Phone size={24} />
+      {/* AUDIO CALL ACTIVE BANNER */}
+      {callStatus === 'connected' && callType === 'audio' && (
+        <div className="w-full max-w-5xl mx-auto mb-3 bg-slate-900 text-white rounded-2xl p-3 px-4 flex items-center justify-between shadow-lg border border-slate-800 shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center animate-pulse">
+              <Phone size={18} />
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-white">Encrypted Audio Call in Progress</p>
+              <p className="text-[10px] text-emerald-400">Connected</p>
+            </div>
           </div>
-          <p className="font-bold text-slate-900 dark:text-white">Incoming Call...</p>
-          <div className="flex gap-2 w-full">
-            <button onClick={() => rejectCall()} className="flex-1 py-2 bg-red-100 text-red-600 rounded-xl hover:bg-red-200 transition font-medium">Decline</button>
-            <button onClick={() => answerCall(false)} className="flex-1 py-2 bg-emerald-500 text-white rounded-xl hover:bg-emerald-600 transition font-medium flex items-center justify-center gap-1"><Phone size={16} /> Audio</button>
-            <button onClick={() => answerCall(true)} className="flex-1 py-2 bg-blue-500 text-white rounded-xl hover:bg-blue-600 transition font-medium flex items-center justify-center gap-1"><Video size={16} /> Video</button>
-          </div>
-        </div>
-      )}
-
-      {callStatus === 'connected' && (
-        <div className="bg-slate-900 text-white p-2 flex items-center justify-center gap-4 shadow-inner relative h-[40vh] sm:h-96 shrink-0 overflow-hidden">
-          <div className="relative h-full w-full max-w-2xl bg-black rounded-lg overflow-hidden border border-slate-700">
-            <video 
-              ref={(v) => { if (v) v.srcObject = remoteStream; }} 
-              autoPlay playsInline className="w-full h-full object-cover"
-            />
-          </div>
-          <div className="absolute bottom-4 right-4 w-24 h-36 sm:w-32 sm:h-48 bg-black rounded-lg overflow-hidden border-2 border-slate-700 shadow-lg z-20">
-            <video 
-              ref={(v) => { if (v) v.srcObject = localStream; }} 
-              autoPlay playsInline muted className="w-full h-full object-cover"
-            />
-          </div>
-          <div className="absolute top-4 right-4 z-30">
-            <button onClick={terminateCall} className="p-3 bg-red-500 text-white rounded-full shadow-lg hover:bg-red-600 transition animate-pulse">
-              <PhoneOff size={20} />
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={toggleAudio}
+              className={`p-2 rounded-xl transition ${isAudioMuted ? 'bg-red-500/20 text-red-400' : 'bg-slate-800 text-white'}`}
+            >
+              {isAudioMuted ? <MicOff size={16} /> : <Mic size={16} />}
+            </button>
+            <button
+              type="button"
+              onClick={terminateCall}
+              className="p-2 px-3 bg-red-500 hover:bg-red-600 text-white rounded-xl transition text-xs font-semibold flex items-center gap-1"
+            >
+              <PhoneOff size={16} /> End
             </button>
           </div>
         </div>
       )}
 
-      {/* Chat Area */}
-      <div 
-        ref={chatContainerRef}
-        className="flex-1 min-h-0 bg-slate-50 dark:bg-slate-900 sm:border-x border-slate-200 dark:border-slate-700 overflow-y-auto p-3 sm:p-4 flex flex-col gap-4 relative"
-      >
-        {isDragActive && (
-          <div className="absolute inset-0 bg-emerald-500/10 border-2 border-emerald-500 border-dashed z-20 flex items-center justify-center backdrop-blur-sm">
-            <div className="bg-white dark:bg-slate-800 p-6 rounded-xl text-center shadow-lg mx-4">
-              <Paperclip size={48} className="mx-auto text-emerald-500 dark:text-emerald-400 mb-4" />
-              <p className="text-xl font-bold text-slate-900 dark:text-white">Drop files to send</p>
-            </div>
-          </div>
-        )}
+      {/* MAIN CONTAINER: Split view if Video Call is active, otherwise centered chat */}
+      <div className={`w-full flex-1 min-h-0 mx-auto ${isVideoCallActive ? 'max-w-[1680px] flex flex-col lg:flex-row gap-4 sm:gap-6' : 'max-w-4xl flex flex-col'}`}>
         
-        <div className="text-center my-2 sm:my-4">
-          <span className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm text-slate-500 dark:text-slate-400 text-[10px] sm:text-xs px-3 py-1 rounded-full">
-            Room PIN: {pin} &bull; End-to-End Encrypted
-          </span>
-        </div>
+        {/* ======================================================== */}
+        {/* LEFT PANE: VIDEO CALL WINDOW (EXACT UI FROM SCREENSHOT)  */}
+        {/* ======================================================== */}
+        {isVideoCallActive && (
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="flex-1 min-w-0 h-[45vh] lg:h-full bg-slate-950 border border-slate-800 rounded-3xl shadow-2xl relative overflow-hidden flex flex-col justify-between shrink-0"
+          >
+            {/* Main Remote Video (Peer) */}
+            <div className="absolute inset-0 w-full h-full bg-slate-950 flex items-center justify-center overflow-hidden">
+              <video 
+                ref={remoteVideoRef}
+                autoPlay 
+                playsInline 
+                className="w-full h-full object-cover"
+              />
+              {/* Fallback / Connecting State */}
+              {(!remoteStream || callStatus === 'calling') && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 text-center p-6 bg-slate-950/90 z-10">
+                  <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-slate-900 border-2 border-emerald-500/50 flex items-center justify-center text-emerald-400 shadow-2xl animate-pulse">
+                    <Video size={36} />
+                  </div>
+                  <div>
+                    <p className="text-base sm:text-lg font-bold text-white">
+                      {callStatus === 'calling' ? 'Calling Anonymous Peer...' : 'Connecting Video Feed...'}
+                    </p>
+                    <p className="text-xs text-slate-400 mt-1">End-to-End Encrypted WebRTC Tunnel</p>
+                  </div>
+                </div>
+              )}
+            </div>
 
-        <AnimatePresence>
-          {messages.map((msg) => (
-            <motion.div
-              key={msg.id}
-              initial={{ opacity: 0, y: 10, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              className={`flex flex-col max-w-[85%] md:max-w-[75%] ${msg.sender === 'me' ? 'self-end items-end' : 'self-start items-start'}`}
-            >
-                            <div 
-                className={`p-3 rounded-2xl shadow-sm relative group ${
-                  msg.sender === 'me' 
-                    ? 'bg-emerald-500 text-white rounded-tr-sm' 
-                    : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 rounded-tl-sm'
+            {/* TOP-LEFT OVERLAY: Anonymous Peer & Status */}
+            <div className="absolute top-4 left-4 z-20 flex items-center gap-2.5 px-3 py-1.5 bg-slate-900/80 backdrop-blur-md border border-slate-700/60 rounded-xl shadow-lg">
+              <div className="w-8 h-8 rounded-lg bg-slate-800/90 flex items-center justify-center text-slate-300">
+                <Lock size={15} />
+              </div>
+              <div className="flex flex-col">
+                <span className="text-white text-xs sm:text-sm font-semibold leading-tight">Anonymous Peer</span>
+                <span className="text-[10px] sm:text-xs text-emerald-400 font-medium flex items-center gap-1.5 leading-tight">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Connected Securely
+                </span>
+              </div>
+            </div>
+
+            {/* TOP-CENTER OVERLAY: Room PIN & Encryption */}
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 hidden md:flex items-center gap-2 px-4 py-1.5 bg-slate-900/80 backdrop-blur-md border border-slate-700/60 rounded-full text-xs font-medium text-slate-300 shadow-lg">
+              <span>Room PIN: <strong className="font-mono text-emerald-400">{pin}</strong></span>
+              <span className="text-slate-500">&bull;</span>
+              <span>End-to-End Encrypted</span>
+            </div>
+
+            {/* TOP-RIGHT OVERLAY: Inset Self PiP Video */}
+            <div className="absolute top-4 right-4 z-20 w-32 sm:w-44 md:w-52 aspect-[4/3] rounded-2xl overflow-hidden border-2 border-slate-700/80 shadow-2xl bg-slate-950 relative group">
+              <video 
+                ref={localVideoRef} 
+                autoPlay 
+                playsInline 
+                muted 
+                className={`w-full h-full object-cover ${!isScreenSharing ? '-scale-x-100' : ''}`}
+              />
+              {isVideoMuted && (
+                <div className="absolute inset-0 bg-slate-950/85 backdrop-blur-xs flex flex-col items-center justify-center text-slate-400 text-xs gap-1">
+                  <VideoOff size={20} />
+                  <span>Camera Off</span>
+                </div>
+              )}
+              <div className="absolute bottom-1.5 right-2 px-2 py-0.5 rounded-md bg-black/60 backdrop-blur-xs text-[10px] text-slate-300 font-medium">
+                You {isAudioMuted ? '(Muted)' : ''}
+              </div>
+            </div>
+
+            {/* BOTTOM-CENTER OVERLAY: Floating Call Controls Dock */}
+            <div className="absolute bottom-5 sm:bottom-6 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2 sm:py-2.5 bg-slate-900/85 backdrop-blur-xl border border-slate-700/70 rounded-2xl shadow-2xl">
+              {/* Mute Mic */}
+              <button
+                type="button"
+                onClick={toggleAudio}
+                title={isAudioMuted ? "Unmute Microphone" : "Mute Microphone"}
+                className={`p-2.5 sm:p-3 rounded-xl transition ${
+                  isAudioMuted 
+                    ? 'bg-red-500/20 text-red-400 border border-red-500/50 hover:bg-red-500/30' 
+                    : 'bg-slate-800/90 hover:bg-slate-700 text-white'
                 }`}
               >
-                {msg.replyTo && (
-                  <div className="mb-2 p-2 rounded bg-black/10 dark:bg-white/10 text-xs opacity-70 border-l-2 border-emerald-500">
-                    <p className="line-clamp-1 truncate overflow-hidden max-w-[200px]">
-                      {messages.find(m => m.id === msg.replyTo)?.content || 'File / Deleted message'}
-                    </p>
-                  </div>
-                )}
-                {msg.isDeleted ? (
-                  <p className="italic text-sm opacity-70 flex items-center gap-2">
-                    <Trash2 size={14} /> This message was deleted
+                {isAudioMuted ? <MicOff size={18} /> : <Mic size={18} />}
+              </button>
+
+              {/* Toggle Camera */}
+              <button
+                type="button"
+                onClick={toggleVideo}
+                title={isVideoMuted ? "Turn Camera On" : "Turn Camera Off"}
+                className={`p-2.5 sm:p-3 rounded-xl transition ${
+                  isVideoMuted 
+                    ? 'bg-red-500/20 text-red-400 border border-red-500/50 hover:bg-red-500/30' 
+                    : 'bg-slate-800/90 hover:bg-slate-700 text-white'
+                }`}
+              >
+                {isVideoMuted ? <VideoOff size={18} /> : <Video size={18} />}
+              </button>
+
+              {/* Screen Share / Switch Display */}
+              <button
+                type="button"
+                onClick={toggleScreenShare}
+                title={isScreenSharing ? "Stop Sharing Screen" : "Share Screen"}
+                className={`p-2.5 sm:p-3 rounded-xl transition ${
+                  isScreenSharing 
+                    ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30' 
+                    : 'bg-slate-800/90 hover:bg-slate-700 text-white'
+                }`}
+              >
+                <Monitor size={18} />
+              </button>
+
+              {/* End Call */}
+              <button
+                type="button"
+                onClick={terminateCall}
+                title="End Call"
+                className="p-2.5 sm:p-3 px-4 sm:px-6 bg-red-500 hover:bg-red-600 active:scale-95 text-white rounded-xl shadow-lg shadow-red-500/40 transition flex items-center justify-center gap-1.5"
+              >
+                <PhoneOff size={18} />
+              </button>
+            </div>
+          </motion.div>
+        )}
+
+        {/* ======================================================== */}
+        {/* RIGHT PANE: CHAT WINDOW                                  */}
+        {/* ======================================================== */}
+        <div className={`flex flex-col bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl overflow-hidden relative ${
+          isVideoCallActive 
+            ? 'w-full lg:w-[420px] xl:w-[480px] h-[55vh] lg:h-full shrink-0' 
+            : 'w-full h-full'
+        }`}>
+
+          {/* Header */}
+          <header className="p-3 sm:p-4 bg-white dark:bg-slate-900/90 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between z-10 shrink-0">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 dark:text-slate-300 shadow-inner">
+                <Lock size={18} />
+              </div>
+              <div>
+                <h2 className="font-bold text-slate-900 dark:text-white text-sm sm:text-base leading-tight">
+                  Anonymous Peer
+                </h2>
+                {status === 'connected' ? (
+                  <p className="text-[11px] text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 leading-tight mt-0.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> Connected Securely
+                    <span className="text-slate-400 dark:text-slate-500 ml-1.5 font-mono">
+                      {Math.floor(chatTimeLeft / 60)}:{(chatTimeLeft % 60).toString().padStart(2, '0')} remaining
+                    </span>
                   </p>
-                ) : msg.type === 'text' ? (
-                  <p className="break-words text-sm sm:text-base">{msg.content}</p>
                 ) : (
-                  <div className="flex flex-col gap-2">
-                    {msg.fileType?.startsWith('image/') ? (
-                        <img src={msg.content} alt={msg.fileName} className="max-w-full max-h-60 rounded-lg bg-black/5 object-contain" />
-                      ) : msg.fileType?.startsWith('video/') ? (
-                        <video controls playsInline preload="metadata" src={msg.content} className="max-w-full max-h-60 rounded-lg bg-black/10" />
-                      ) : msg.fileType?.startsWith('audio/') ? (
-                      <div className="flex flex-col gap-1 min-w-[200px]">
-                        <audio controls src={msg.content} className="h-10 w-full" />
+                  <p className="text-[11px] text-amber-500 flex items-center gap-1.5 leading-tight mt-0.5 animate-pulse">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span> Reconnecting...
+                    <span className="text-slate-400 dark:text-slate-500 ml-1.5 font-mono">
+                      {Math.floor(chatTimeLeft / 60)}:{(chatTimeLeft % 60).toString().padStart(2, '0')} remaining
+                    </span>
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1 sm:gap-2">
+              {callStatus === 'idle' && (
+                <>
+                  <button 
+                    onClick={() => startCall(false)} 
+                    className="p-2 text-slate-500 hover:text-emerald-500 dark:text-slate-400 dark:hover:text-emerald-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition" 
+                    title="Voice Call"
+                  >
+                    <Phone size={20} />
+                  </button>
+                  <button 
+                    onClick={() => startCall(true)} 
+                    className="p-2 text-slate-500 hover:text-emerald-500 dark:text-slate-400 dark:hover:text-emerald-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition" 
+                    title="Video Call"
+                  >
+                    <Video size={20} />
+                  </button>
+                </>
+              )}
+              {callStatus === 'calling' && !isVideoCallActive && (
+                <div className="flex items-center gap-1 bg-amber-50 dark:bg-amber-500/10 rounded-full px-2 py-1">
+                  <span className="text-xs font-bold text-amber-500 animate-pulse px-2">Calling...</span>
+                  <button type="button" onClick={terminateCall} className="p-1.5 bg-red-100 text-red-500 rounded-full hover:bg-red-200 transition" title="Cancel Call">
+                    <PhoneOff size={14} />
+                  </button>
+                </div>
+              )}
+              <button 
+                onClick={handleLeave}
+                className="p-2 text-slate-500 hover:text-red-500 dark:text-slate-400 dark:hover:text-red-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition"
+                title="Leave Chat"
+              >
+                <LogOut size={20} />
+              </button>
+            </div>
+          </header>
+
+          {/* Messages Feed */}
+          <div 
+            ref={chatContainerRef}
+            className="flex-1 min-h-0 bg-slate-50 dark:bg-[#0c152e] overflow-y-auto p-3 sm:p-4 flex flex-col gap-3 relative"
+          >
+            {isDragActive && (
+              <div className="absolute inset-0 bg-emerald-500/10 border-2 border-emerald-500 border-dashed z-20 flex items-center justify-center backdrop-blur-sm">
+                <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl text-center shadow-lg mx-4">
+                  <Paperclip size={44} className="mx-auto text-emerald-500 mb-3" />
+                  <p className="text-lg font-bold text-slate-900 dark:text-white">Drop files to send securely</p>
+                </div>
+              </div>
+            )}
+            
+            {!isVideoCallActive && (
+              <div className="text-center my-2">
+                <span className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm text-slate-500 dark:text-slate-400 text-[10px] sm:text-xs px-3 py-1 rounded-full">
+                  Room PIN: {pin} &bull; End-to-End Encrypted
+                </span>
+              </div>
+            )}
+
+            <AnimatePresence>
+              {messages.map((msg) => (
+                <motion.div
+                  key={msg.id}
+                  initial={{ opacity: 0, y: 8, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  className={`flex flex-col max-w-[85%] md:max-w-[78%] ${msg.sender === 'me' ? 'self-end items-end' : 'self-start items-start'}`}
+                >
+                  <div 
+                    className={`p-3 rounded-2xl shadow-sm relative group ${
+                      msg.sender === 'me' 
+                        ? 'bg-emerald-600 text-white rounded-tr-xs' 
+                        : 'bg-white dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700/80 text-slate-900 dark:text-slate-100 rounded-tl-xs'
+                    }`}
+                  >
+                    {msg.replyTo && (
+                      <div className="mb-2 p-2 rounded-lg bg-black/10 dark:bg-white/10 text-xs opacity-75 border-l-2 border-emerald-400">
+                        <p className="line-clamp-1 truncate overflow-hidden max-w-[200px]">
+                          {messages.find(m => m.id === msg.replyTo)?.content || 'File / Deleted message'}
+                        </p>
                       </div>
+                    )}
+                    {msg.isDeleted ? (
+                      <p className="italic text-sm opacity-70 flex items-center gap-2">
+                        <Trash2 size={14} /> This message was deleted
+                      </p>
+                    ) : msg.type === 'text' ? (
+                      <p className="break-words text-sm sm:text-base leading-relaxed">{msg.content}</p>
                     ) : (
-                      <a href={msg.content} download={msg.fileName} className={`flex items-center gap-2 sm:gap-3 p-2 rounded-lg ${msg.sender === 'me' ? 'bg-emerald-600/50' : 'bg-slate-100 dark:bg-slate-700'} hover:opacity-80 transition`}>
-                        <FileIcon size={20} className="shrink-0" />
-                        <div className="flex flex-col overflow-hidden">
-                          <span className="font-medium text-sm truncate max-w-[120px] sm:max-w-[150px]">{msg.fileName}</span>
-                          <span className="text-[10px] sm:text-xs opacity-70">
-                            {msg.fileSize ? (msg.fileSize / 1024).toFixed(1) + ' KB' : 'File'}
-                          </span>
-                        </div>
-                      </a>
+                      <div className="flex flex-col gap-2">
+                        {msg.fileType?.startsWith('image/') ? (
+                          <img src={msg.content} alt={msg.fileName} className="max-w-full max-h-60 rounded-xl bg-black/5 object-contain" />
+                        ) : msg.fileType?.startsWith('video/') ? (
+                          <video controls playsInline preload="metadata" src={msg.content} className="max-w-full max-h-60 rounded-xl bg-black/10" />
+                        ) : msg.fileType?.startsWith('audio/') ? (
+                          <div className="flex flex-col gap-1 min-w-[200px]">
+                            <audio controls src={msg.content} className="h-10 w-full" />
+                          </div>
+                        ) : (
+                          <a 
+                            href={msg.content} 
+                            download={msg.fileName} 
+                            className={`flex items-center gap-3 p-2.5 rounded-xl ${
+                              msg.sender === 'me' ? 'bg-emerald-700/60 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white'
+                            } hover:opacity-90 transition`}
+                          >
+                            <div className="w-9 h-9 rounded-lg bg-amber-400/20 text-amber-500 flex items-center justify-center shrink-0">
+                              <FileIcon size={20} />
+                            </div>
+                            <div className="flex flex-col overflow-hidden">
+                              <span className="font-semibold text-xs sm:text-sm truncate max-w-[140px] sm:max-w-[180px]">{msg.fileName}</span>
+                              <span className="text-[10px] sm:text-xs opacity-70">
+                                {msg.fileSize ? (msg.fileSize / (1024 * 1024)).toFixed(1) + ' MB' : 'File'} &bull; Direct Transfer
+                              </span>
+                            </div>
+                          </a>
+                        )}
+                      </div>
                     )}
                   </div>
-                )}
+                  <div className="flex items-center gap-1 mt-1 mx-1 text-slate-400 text-[10px]">
+                    <span>{formatTime(msg.timestamp)}</span>
+                    {msg.sender === 'me' && (
+                      <span className="flex items-center ml-1">
+                        {msg.status === 'read' ? <CheckCheck size={14} className="text-blue-400" /> : <Check size={14} />}
+                      </span>
+                    )}
+                    {msg.sender === 'peer' && !msg.isDeleted && (
+                      <button type="button" onClick={(e) => { e.preventDefault(); setReplyingTo(msg); }} className="p-1 text-slate-400 hover:text-emerald-500 transition ml-1" title="Reply">
+                        <Reply size={13} />
+                      </button>
+                    )}
+                    {msg.sender === 'me' && !msg.isDeleted && (
+                      <button type="button" onClick={(e) => { e.preventDefault(); deleteMessage(msg.id); }} className="p-1 text-slate-400 hover:text-red-500 transition ml-1" title="Delete for everyone">
+                        <Trash2 size={13} />
+                      </button>
+                    )}
+                  </div>
+                </motion.div>
+              ))}
+            </AnimatePresence>
+            <div ref={messagesEndRef} />
+            
+            {isPeerTyping && (
+              <div className="text-xs text-slate-400 italic ml-2 flex items-center gap-2 mb-1">
+                <span className="flex gap-1">
+                  <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                  <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                  <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                </span>
+                Peer is typing...
               </div>
-              <div className="flex items-center gap-1 mt-1 mx-1 text-slate-500">
-                <span className="text-[10px]">{formatTime(msg.timestamp)}</span>
-                {msg.sender === 'me' && (
-                  <span className="flex items-center ml-1">
-                    {msg.status === 'read' ? <CheckCheck size={14} className="text-blue-500" /> : <Check size={14} />}
-                  </span>
-                )}
-                {msg.sender === 'peer' && !msg.isDeleted && (
-                  <button type="button" onClick={(e) => { e.preventDefault(); setReplyingTo(msg); }} className="p-2 -m-2 ml-2 text-slate-400 hover:text-emerald-500 transition cursor-pointer" title="Reply">
-                    <Reply size={14} />
-                  </button>
-                )}
-                {msg.sender === 'me' && !msg.isDeleted && (
-                  <button type="button" onClick={(e) => { e.preventDefault(); deleteMessage(msg.id); }} className="p-2 -m-2 ml-2 text-slate-400 hover:text-red-500 transition cursor-pointer" title="Delete for everyone">
-                      <Trash2 size={16} />
-                    </button>
-                )}
-              </div>
-            </motion.div>
-          ))}
-        </AnimatePresence>
-        <div ref={messagesEndRef} />
-        {isPeerTyping && (
-          <div className="text-xs text-slate-500 italic ml-4 flex items-center gap-2 mb-2">
-            <span className="flex gap-1">
-              <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-              <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-              <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-            </span>
-            Peer is typing...
+            )}
           </div>
-        )}
-      </div>
 
-      {/* Input Area */}
-      {replyingTo && (
-        <div className="bg-slate-100 dark:bg-slate-800 p-2 text-xs flex justify-between items-center mx-4 -mb-2 rounded-t-lg z-10 relative shadow-sm border-t border-x border-slate-200 dark:border-slate-700">
-          <span className="truncate opacity-70 border-l-2 border-emerald-500 pl-2">
-            Replying to: {replyingTo.content || 'File'}
-          </span>
-          <button type="button" onClick={() => setReplyingTo(null)} className="p-1 hover:text-red-500"><X size={14} /></button>
-        </div>
-      )}
-      <form onSubmit={handleSend} className="bg-white dark:bg-slate-800 border-t sm:border border-slate-200 dark:border-slate-700 sm:rounded-b-2xl p-2 sm:p-3 md:p-4 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:pb-3 md:pb-4 flex gap-2 items-end shadow-[0_-4px_10px_rgba(0,0,0,0.02)] dark:shadow-none shrink-0">
-        
-        {!isRecording && (
-          <label className="p-2 md:p-3 text-slate-500 dark:text-slate-400 hover:text-emerald-500 dark:hover:text-emerald-400 cursor-pointer transition flex-shrink-0">
-            <input type="file" className="hidden" onClick={(e) => e.stopPropagation()} onChange={(e) => {
-              if (e.target.files && e.target.files[0]) {
-                sendFile(e.target.files[0]);
-                e.target.value = '';
-              }
-            }} />
-            <Paperclip size={24} />
-          </label>
-        )}
-        
-        {isRecording ? (
-          <div className="flex-1 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-xl border border-red-200 dark:border-red-900/50 p-3 h-[46px] flex items-center justify-between animate-pulse">
-            <div className="flex items-center gap-2">
-              <Mic size={18} className="animate-bounce" />
-              <span className="font-medium text-sm">Recording Audio...</span>
+          {/* Input Area */}
+          {replyingTo && (
+            <div className="bg-slate-100 dark:bg-slate-800 p-2 text-xs flex justify-between items-center mx-3 -mb-1 rounded-t-xl z-10 relative shadow-sm border-t border-x border-slate-200 dark:border-slate-700">
+              <span className="truncate opacity-75 border-l-2 border-emerald-500 pl-2">
+                Replying to: {replyingTo.content || 'File'}
+              </span>
+              <button type="button" onClick={() => setReplyingTo(null)} className="p-1 hover:text-red-500"><X size={14} /></button>
             </div>
-            <span className="font-mono">{formatDuration(recordingTime)}</span>
-          </div>
-        ) : (
-          <textarea
-            value={input}
-            onChange={(e) => {
-              setInput(e.target.value);
-              sendTypingState(true);
-              if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-              typingTimeoutRef.current = setTimeout(() => sendTypingState(false), 2000);
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                handleSend(e);
-              }
-            }}
-            placeholder="Type a secure message..."
-            className="flex-1 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white rounded-xl border border-slate-200 dark:border-slate-700 p-3 max-h-32 min-h-[46px] resize-none focus:outline-none focus:border-emerald-500 transition placeholder-slate-400"
-            rows={1}
-          />
-        )}
-        
-        {input.trim() ? (
-          <button
-            type="submit"
-            className="p-3 bg-emerald-500 text-white dark:text-slate-900 rounded-xl hover:bg-emerald-600 dark:hover:bg-emerald-400 transition flex-shrink-0"
-          >
-            <Send size={20} />
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={isRecording ? stopRecording : startRecording}
-            className={`p-3 rounded-xl transition flex-shrink-0 text-white ${
-              isRecording 
-                ? 'bg-red-500 hover:bg-red-600 dark:text-white shadow-[0_0_15px_rgba(239,68,68,0.5)]' 
-                : 'bg-emerald-500 hover:bg-emerald-600 dark:text-slate-900'
-            }`}
-          >
-            {isRecording ? <Square size={20} fill="currentColor" /> : <Mic size={20} />}
-          </button>
-        )}
-      </form>
+          )}
+
+          <form onSubmit={handleSend} className="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 p-2 sm:p-3 flex gap-2 items-end shadow-sm shrink-0">
+            {!isRecording && (
+              <label className="p-2.5 text-slate-400 hover:text-emerald-500 transition cursor-pointer shrink-0">
+                <input type="file" className="hidden" onClick={(e) => e.stopPropagation()} onChange={(e) => {
+                  if (e.target.files && e.target.files[0]) {
+                    sendFile(e.target.files[0]);
+                    e.target.value = '';
+                  }
+                }} />
+                <Paperclip size={22} />
+              </label>
+            )}
+
+            {isRecording ? (
+              <div className="flex-1 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 rounded-xl border border-red-200 dark:border-red-900/50 p-2.5 h-[44px] flex items-center justify-between animate-pulse">
+                <div className="flex items-center gap-2">
+                  <Mic size={18} className="animate-bounce" />
+                  <span className="font-semibold text-xs sm:text-sm">Recording Voice Note...</span>
+                </div>
+                <span className="font-mono text-xs">{formatDuration(recordingTime)}</span>
+              </div>
+            ) : (
+              <textarea
+                value={input}
+                onChange={(e) => {
+                  setInput(e.target.value);
+                  sendTypingState(true);
+                  if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+                  typingTimeoutRef.current = setTimeout(() => sendTypingState(false), 2000);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSend(e);
+                  }
+                }}
+                placeholder="Type a secure message..."
+                className="flex-1 bg-slate-100 dark:bg-slate-800/80 text-slate-900 dark:text-white rounded-xl border border-slate-200 dark:border-slate-700/80 p-2.5 px-3 max-h-32 min-h-[44px] resize-none focus:outline-none focus:border-emerald-500 transition placeholder-slate-400 text-sm leading-relaxed"
+                rows={1}
+              />
+            )}
+
+            {input.trim() ? (
+              <button
+                type="submit"
+                className="p-2.5 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white rounded-xl transition shrink-0 shadow-md shadow-emerald-500/20"
+              >
+                <Send size={19} />
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={isRecording ? stopRecording : startRecording}
+                className={`p-2.5 rounded-xl transition shrink-0 text-white ${
+                  isRecording 
+                    ? 'bg-red-500 hover:bg-red-600 shadow-md shadow-red-500/40 animate-pulse' 
+                    : 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-md shadow-emerald-500/20'
+                }`}
+              >
+                {isRecording ? <Square size={19} fill="currentColor" /> : <Mic size={19} />}
+              </button>
+            )}
+          </form>
+        </div>
+      </div>
     </div>
   );
 };

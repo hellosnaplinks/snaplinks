@@ -34,6 +34,14 @@ interface ChatContextType {
   localStream: MediaStream | null;
   remoteStream: MediaStream | null;
   callStatus: 'idle' | 'calling' | 'receiving' | 'connected';
+  callType: 'audio' | 'video';
+  isAudioMuted: boolean;
+  isVideoMuted: boolean;
+  isScreenSharing: boolean;
+  toggleAudio: () => void;
+  toggleVideo: () => void;
+  toggleScreenShare: () => Promise<void>;
+  switchCamera: () => Promise<void>;
   startCall: (video: boolean) => Promise<void>;
   answerCall: (video: boolean) => Promise<void>;
   rejectCall: () => void;
@@ -85,11 +93,132 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const [callStatus, setCallStatus] = useState<'idle' | 'calling' | 'receiving' | 'connected'>('idle');
+  const [callType, setCallType] = useState<'audio' | 'video'>('video');
+  const [isAudioMuted, setIsAudioMuted] = useState(false);
+  const [isVideoMuted, setIsVideoMuted] = useState(false);
+  const [isScreenSharing, setIsScreenSharing] = useState(false);
+  const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
   const [incomingCall, setIncomingCall] = useState<any>(null);
   const currentCallRef = useRef<any>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
+  const screenStreamRef = useRef<MediaStream | null>(null);
+
+  const toggleAudio = () => {
+    if (localStreamRef.current) {
+      const audioTrack = localStreamRef.current.getAudioTracks()[0];
+      if (audioTrack) {
+        audioTrack.enabled = !audioTrack.enabled;
+        setIsAudioMuted(!audioTrack.enabled);
+      }
+    }
+  };
+
+  const toggleVideo = () => {
+    if (localStreamRef.current) {
+      const videoTrack = localStreamRef.current.getVideoTracks()[0];
+      if (videoTrack) {
+        videoTrack.enabled = !videoTrack.enabled;
+        setIsVideoMuted(!videoTrack.enabled);
+      }
+    }
+  };
+
+  const switchCamera = async () => {
+    if (!localStreamRef.current) return;
+    try {
+      const nextMode = facingMode === 'user' ? 'environment' : 'user';
+      let newStream: MediaStream;
+      try {
+        newStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { exact: nextMode } },
+          audio: false
+        });
+      } catch {
+        newStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: nextMode },
+          audio: false
+        });
+      }
+      const newVideoTrack = newStream.getVideoTracks()[0];
+      const oldVideoTrack = localStreamRef.current.getVideoTracks()[0];
+      if (oldVideoTrack) {
+        localStreamRef.current.removeTrack(oldVideoTrack);
+        oldVideoTrack.stop();
+      }
+      localStreamRef.current.addTrack(newVideoTrack);
+      const sender = currentCallRef.current?.peerConnection?.getSenders()?.find((s: any) => s.track?.kind === 'video');
+      if (sender) {
+        await sender.replaceTrack(newVideoTrack);
+      }
+      setFacingMode(nextMode);
+      setLocalStream(new MediaStream(localStreamRef.current.getTracks()));
+    } catch (err) {
+      console.warn('Switch camera error:', err);
+    }
+  };
+
+  const toggleScreenShare = async () => {
+    try {
+      if (isScreenSharing) {
+        if (screenStreamRef.current) {
+          screenStreamRef.current.getTracks().forEach(t => t.stop());
+          screenStreamRef.current = null;
+        }
+        const camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode }, audio: false });
+        const camTrack = camStream.getVideoTracks()[0];
+        if (localStreamRef.current) {
+          const oldTrack = localStreamRef.current.getVideoTracks()[0];
+          if (oldTrack) {
+            localStreamRef.current.removeTrack(oldTrack);
+            oldTrack.stop();
+          }
+          localStreamRef.current.addTrack(camTrack);
+        }
+        const sender = currentCallRef.current?.peerConnection?.getSenders()?.find((s: any) => s.track?.kind === 'video');
+        if (sender) {
+          await sender.replaceTrack(camTrack);
+        }
+        setIsScreenSharing(false);
+        setLocalStream(new MediaStream(localStreamRef.current ? localStreamRef.current.getTracks() : []));
+      } else {
+        if (!navigator.mediaDevices?.getDisplayMedia) {
+          await switchCamera();
+          return;
+        }
+        const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+        screenStreamRef.current = screenStream;
+        const screenTrack = screenStream.getVideoTracks()[0];
+        screenTrack.onended = () => {
+          toggleScreenShare();
+        };
+        if (localStreamRef.current) {
+          const oldTrack = localStreamRef.current.getVideoTracks()[0];
+          if (oldTrack) {
+            localStreamRef.current.removeTrack(oldTrack);
+            oldTrack.stop();
+          }
+          localStreamRef.current.addTrack(screenTrack);
+        }
+        const sender = currentCallRef.current?.peerConnection?.getSenders()?.find((s: any) => s.track?.kind === 'video');
+        if (sender) {
+          await sender.replaceTrack(screenTrack);
+        }
+        setIsScreenSharing(true);
+        setLocalStream(new MediaStream(localStreamRef.current ? localStreamRef.current.getTracks() : []));
+      }
+    } catch (err: any) {
+      console.warn('Screen share cancelled/error:', err);
+    }
+  };
 
   const endCall = () => {
+    if (screenStreamRef.current) {
+      screenStreamRef.current.getTracks().forEach(t => t.stop());
+      screenStreamRef.current = null;
+    }
+    setIsScreenSharing(false);
+    setIsAudioMuted(false);
+    setIsVideoMuted(false);
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach(t => t.stop());
       localStreamRef.current = null;
@@ -105,6 +234,10 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const startCall = async (video: boolean) => {
+    setCallType(video ? 'video' : 'audio');
+    setIsAudioMuted(false);
+    setIsVideoMuted(false);
+    setIsScreenSharing(false);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: video ? { facingMode: 'user' } : false, audio: true });
       localStreamRef.current = stream;
@@ -129,6 +262,10 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const answerCall = async (video: boolean) => {
+    setCallType(video ? 'video' : 'audio');
+    setIsAudioMuted(false);
+    setIsVideoMuted(false);
+    setIsScreenSharing(false);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: video ? { facingMode: 'user' } : false, audio: true });
       localStreamRef.current = stream;
@@ -148,7 +285,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-    const rejectCall = () => {
+  const rejectCall = () => {
     managerRef.current?.sendMessage({ type: 'call-ended' });
     if (incomingCall) incomingCall.close();
     setIncomingCall(null);
@@ -377,7 +514,14 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <ChatContext.Provider value={{ peerManager, status, messages, sendMessage, sendFile, deleteMessage, initHost, initGuest, disconnect, pin, isPeerTyping, sendTypingState, localStream, remoteStream, callStatus, startCall, answerCall, rejectCall, endCall, terminateCall }}>
+    <ChatContext.Provider value={{
+      peerManager, status, messages, sendMessage, sendFile, deleteMessage,
+      initHost, initGuest, disconnect, pin, isPeerTyping, sendTypingState,
+      localStream, remoteStream, callStatus, callType,
+      isAudioMuted, isVideoMuted, isScreenSharing,
+      toggleAudio, toggleVideo, toggleScreenShare, switchCamera,
+      startCall, answerCall, rejectCall, endCall, terminateCall
+    }}>
       {children}
     </ChatContext.Provider>
   );
