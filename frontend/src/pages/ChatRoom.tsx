@@ -468,7 +468,7 @@ const ChatRoom = () => {
                 type="button"
                 onClick={toggleAudio}
                 title={isAudioMuted ? "Unmute Microphone" : "Mute Microphone"}
-                className={`p-2 sm:p-2.5 rounded-xl transition ${
+                className={`p-2 sm:p-2.5 rounded-xl transition shrink-0 ${
                   isAudioMuted 
                     ? 'bg-red-500/20 text-red-400 border border-red-500/50 hover:bg-red-500/30' 
                     : 'bg-slate-800/90 hover:bg-slate-700 text-white'
@@ -482,7 +482,7 @@ const ChatRoom = () => {
                 type="button"
                 onClick={toggleVideo}
                 title={isVideoMuted ? "Turn Camera On" : "Turn Camera Off"}
-                className={`p-2 sm:p-2.5 rounded-xl transition ${
+                className={`p-2 sm:p-2.5 rounded-xl transition shrink-0 ${
                   isVideoMuted 
                     ? 'bg-red-500/20 text-red-400 border border-red-500/50 hover:bg-red-500/30' 
                     : 'bg-slate-800/90 hover:bg-slate-700 text-white'
@@ -497,7 +497,7 @@ const ChatRoom = () => {
                   type="button"
                   onClick={switchCamera}
                   title="Switch Camera (Front / Back)"
-                  className="p-2 sm:p-2.5 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-white transition active:scale-95 flex items-center justify-center"
+                  className="p-2 sm:p-2.5 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-white transition active:scale-95 flex items-center justify-center shrink-0"
                 >
                   <RefreshCw size={18} />
                 </button>
@@ -509,7 +509,7 @@ const ChatRoom = () => {
                   type="button"
                   onClick={toggleScreenShare}
                   title={isScreenSharing ? "Stop Sharing Screen" : "Share Screen"}
-                  className={`p-2 sm:p-2.5 rounded-xl transition flex items-center justify-center ${
+                  className={`p-2 sm:p-2.5 rounded-xl transition flex items-center justify-center shrink-0 ${
                     isScreenSharing 
                       ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30' 
                       : 'bg-slate-800/90 hover:bg-slate-700 text-white'
@@ -524,7 +524,7 @@ const ChatRoom = () => {
                 type="button"
                 onClick={terminateCall}
                 title="End Call"
-                className="p-2 sm:p-2.5 px-4 sm:px-5 bg-red-500 hover:bg-red-600 active:scale-95 text-white rounded-xl shadow-lg shadow-red-500/40 transition flex items-center justify-center gap-1.5"
+                className="p-2 sm:p-2.5 px-4 sm:px-5 bg-red-500 hover:bg-red-600 active:scale-95 text-white rounded-xl shadow-lg shadow-red-500/40 transition flex items-center justify-center gap-1.5 shrink-0"
               >
                 <PhoneOff size={18} />
               </button>

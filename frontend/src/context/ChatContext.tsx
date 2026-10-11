@@ -107,45 +107,37 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const screenStreamRef = useRef<MediaStream | null>(null);
 
   // Check whether client is running on a real mobile device (phone / tablet)
-  const isMobileDevice = typeof window !== 'undefined' && (
-    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile/i.test(navigator.userAgent || '') ||
-    (('maxTouchPoints' in navigator) && navigator.maxTouchPoints > 1 && /Macintosh/i.test(navigator.userAgent || ''))
-  );
+  // Supports standard mobile UAs, iOS desktop mode, and 6.1" smartphones in any browser mode
+  const isMobileDevice = typeof window !== 'undefined' && (() => {
+    const ua = navigator.userAgent || '';
+    if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile/i.test(ua)) {
+      return true;
+    }
+    // iPhone / iPad with "Request Desktop Website"
+    if (navigator.maxTouchPoints > 1 && /Macintosh/i.test(ua)) {
+      return true;
+    }
+    // Smartphone screen (e.g. 6.1" phone) with touch capability
+    const hasTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+    const minScreenDim = Math.min(
+      window.screen?.width || 1920,
+      window.screen?.height || 1080
+    );
+    if (hasTouch && minScreenDim <= 640) {
+      return true;
+    }
+    return false;
+  })();
 
-  // Laptops/Desktops NEVER have flip camera button (always false)
-  // Mobile devices default to true unless device enumeration confirms single camera
-  const [canSwitchCamera, setCanSwitchCamera] = useState<boolean>(() => {
-    if (!isMobileDevice) return false;
-    return true;
-  });
+  // Laptops/Desktops NEVER have flip camera button (always false).
+  // ALL mobile devices ALWAYS have flip camera button (always true).
+  // Note: We do NOT disable on mobile even if enumerateDevices returns 1 device,
+  // because iOS Safari (6.1" iPhones) hides unselected cameras for privacy until requested,
+  // but facingMode: 'environment' successfully switches to the physical back camera.
+  const [canSwitchCamera, setCanSwitchCamera] = useState<boolean>(() => isMobileDevice);
 
   useEffect(() => {
-    if (!isMobileDevice) {
-      setCanSwitchCamera(false);
-      return;
-    }
-    const checkCameras = async () => {
-      try {
-        if (navigator.mediaDevices?.enumerateDevices) {
-          const devices = await navigator.mediaDevices.enumerateDevices();
-          const videoInputs = devices.filter(d => d.kind === 'videoinput');
-          // If 0 devices returned, permission not yet granted; allow switch button on mobile.
-          // If >= 2 devices returned, multiple cameras confirmed.
-          if (videoInputs.length >= 2 || videoInputs.length === 0) {
-            setCanSwitchCamera(true);
-          } else {
-            setCanSwitchCamera(false);
-          }
-        }
-      } catch {
-        setCanSwitchCamera(true);
-      }
-    };
-    checkCameras();
-    navigator.mediaDevices?.addEventListener?.('devicechange', checkCameras);
-    return () => {
-      navigator.mediaDevices?.removeEventListener?.('devicechange', checkCameras);
-    };
+    setCanSwitchCamera(isMobileDevice);
   }, [isMobileDevice]);
 
   const toggleAudio = () => {

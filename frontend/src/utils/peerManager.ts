@@ -86,7 +86,9 @@ export class PeerManager {
         console.warn('Ignoring non-fatal signaling error:', err.type);
         return;
       }
-      this.onConnectionStatusChange('disconnected');
+      if (!this.connection || !this.connection.open) {
+        this.onConnectionStatusChange('disconnected');
+      }
     });
 
     // Handle mobile browser app switching (e.g. going to WhatsApp and coming back)
@@ -199,14 +201,18 @@ export class PeerManager {
     });
 
     conn.on('close', () => {
-      console.log('Peer connection closed');
-      this.onConnectionStatusChange('disconnected');
-      this.connection = null;
+      console.log('Peer connection closed for:', conn.peer);
+      if (this.connection === conn) {
+        this.onConnectionStatusChange('disconnected');
+        this.connection = null;
+      }
     });
     
     conn.on('error', (err) => {
       console.error('Connection error:', err);
-      this.onConnectionStatusChange('disconnected');
+      if (this.connection === conn) {
+        this.onConnectionStatusChange('disconnected');
+      }
     });
   }
 

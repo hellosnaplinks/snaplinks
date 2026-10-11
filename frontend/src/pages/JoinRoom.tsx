@@ -31,6 +31,8 @@ const JoinRoom = () => {
   useEffect(() => {
     if (status === 'connecting') {
       setHasAttempted(true);
+      setError('');
+      setLoading(true);
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
       timeoutRef.current = setTimeout(() => {
         if (statusRef.current !== 'connected') {
@@ -41,6 +43,7 @@ const JoinRoom = () => {
       }, 15000);
     } else if (status === 'connected') {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      setLoading(false);
       navigate(`/chat/${pin || urlPin}`);
     } else if (status === 'disconnected' && hasAttempted) {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
@@ -63,7 +66,6 @@ const JoinRoom = () => {
     setPin(pinToJoin);
     setError('');
     setLoading(true);
-    setHasAttempted(true);
     try {
       await initGuest(pinToJoin);
     } catch (err: any) {
