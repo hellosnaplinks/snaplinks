@@ -367,17 +367,17 @@ const ChatRoom = () => {
               </div>
             </div>
 
-            {/* TOP-CENTER OVERLAY: Room PIN & Encryption */}
-            <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 hidden md:flex items-center gap-2 px-4 py-1.5 bg-slate-900/80 backdrop-blur-md border border-slate-700/60 rounded-full text-xs font-medium text-slate-300 shadow-lg">
-              <span>Room PIN: <strong className="font-mono text-emerald-400">{pin}</strong></span>
-              <span className="text-slate-500">&bull;</span>
-              <span>End-to-End Encrypted</span>
+            {/* TOP-RIGHT/CENTER OVERLAY: Room PIN & Encryption */}
+            <div className="absolute top-3 sm:top-4 right-3 md:right-auto md:left-1/2 md:-translate-x-1/2 z-20 flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-1 sm:py-1.5 bg-slate-900/80 backdrop-blur-md border border-slate-700/60 rounded-full text-[10px] sm:text-xs font-medium text-slate-300 shadow-lg">
+              <span>PIN: <strong className="font-mono text-emerald-400">{pin}</strong></span>
+              <span className="hidden sm:inline text-slate-500">&bull;</span>
+              <span className="hidden sm:inline">Encrypted</span>
             </div>
 
             {/* BOTTOM-RIGHT OVERLAY: WhatsApp Style Inset Self Video ("My Side Video") */}
             <div 
-              style={{ position: 'absolute', top: 'auto', left: 'auto' }}
-              className="!top-auto !left-auto !bottom-20 sm:!bottom-24 md:!bottom-6 !right-3 sm:!right-4 md:!right-6 z-30 w-24 sm:w-32 md:w-36 lg:w-40 aspect-[9/16] rounded-2xl overflow-hidden border-2 border-slate-700/80 shadow-2xl bg-slate-950 group transition-all"
+              style={{ position: 'absolute', top: 'auto', left: 'auto', bottom: 'clamp(60px, 10vh, 85px)', right: '12px' }}
+              className="!top-auto !left-auto md:!bottom-6 md:!right-6 z-30 w-20 sm:w-28 md:w-36 lg:w-40 aspect-[9/16] rounded-xl sm:rounded-2xl overflow-hidden border-2 border-slate-700/80 shadow-2xl bg-slate-950 group transition-all"
             >
               <video 
                 ref={(el) => {
@@ -465,7 +465,7 @@ const ChatRoom = () => {
         {/* ======================================================== */}
         <div className={`flex flex-col bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl overflow-hidden relative ${
           isVideoCallActive 
-            ? `${mobileTab === 'video' ? 'hidden lg:flex' : 'flex-1 min-h-0 lg:flex-none lg:w-[420px] xl:w-[480px] h-full'} lg:shrink-0` 
+            ? `${mobileTab === 'video' ? 'hidden lg:flex' : 'flex-1 min-h-0 lg:flex-none lg:w-[420px] xl:w-[480px] lg:h-full'} lg:shrink-0` 
             : 'w-full h-full'
         }`}>
 
