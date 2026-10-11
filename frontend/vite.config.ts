@@ -9,6 +9,10 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['logo-icon.jpg'],
+      workbox: {
+        skipWaiting: true,
+        clientsClaim: true
+      },
       manifest: {
         name: 'SnapLinks',
         short_name: 'SnapLinks',

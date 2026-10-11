@@ -375,7 +375,10 @@ const ChatRoom = () => {
             </div>
 
             {/* BOTTOM-RIGHT OVERLAY: WhatsApp Style Inset Self Video ("My Side Video") */}
-            <div className="absolute bottom-20 sm:bottom-24 md:bottom-6 right-3 sm:right-4 md:right-6 z-30 w-24 sm:w-32 md:w-36 lg:w-40 aspect-[9/16] rounded-2xl overflow-hidden border-2 border-slate-700/80 shadow-2xl bg-slate-950 group transition-all">
+            <div 
+              style={{ position: 'absolute', top: 'auto', left: 'auto' }}
+              className="!top-auto !left-auto !bottom-20 sm:!bottom-24 md:!bottom-6 !right-3 sm:!right-4 md:!right-6 z-30 w-24 sm:w-32 md:w-36 lg:w-40 aspect-[9/16] rounded-2xl overflow-hidden border-2 border-slate-700/80 shadow-2xl bg-slate-950 group transition-all"
+            >
               <video 
                 ref={(el) => {
                   localVideoRef.current = el;
