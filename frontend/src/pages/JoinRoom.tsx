@@ -1,38 +1,58 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { LogIn, Loader2, Shield, QrCode, X, ArrowLeft } from 'lucide-react';
+import { LogIn, Loader2, Shield, QrCode, X, ArrowLeft, RefreshCw } from 'lucide-react';
 import { useChat } from '../context/ChatContext';
 import { Scanner } from '@yudiel/react-qr-scanner';
 
 const JoinRoom = () => {
   const { pin: urlPin } = useParams<{ pin: string }>();
   const [pin, setPin] = useState(urlPin || '');
-    const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [isScanning, setIsScanning] = useState(false);
   const [hasAttempted, setHasAttempted] = useState(false);
+  const [scannerFacing, setScannerFacing] = useState<'environment' | 'user'>('environment');
+  const timeoutRef = useRef<any>(null);
   
   const { initGuest, status } = useChat();
   const navigate = useNavigate();
 
   useEffect(() => {
     if (urlPin && urlPin.length === 6) {
+      setPin(urlPin);
       handleJoin(urlPin);
     }
   }, [urlPin]);
 
-    useEffect(() => {
+  const statusRef = useRef(status);
+  statusRef.current = status;
+
+  useEffect(() => {
     if (status === 'connecting') {
       setHasAttempted(true);
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      timeoutRef.current = setTimeout(() => {
+        if (statusRef.current !== 'connected') {
+          setLoading(false);
+          setHasAttempted(false);
+          setError('Connection timed out. Please verify the host is online and try again.');
+        }
+      }, 15000);
     } else if (status === 'connected') {
-      navigate(`/chat/${pin}`);
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      navigate(`/chat/${pin || urlPin}`);
     } else if (status === 'disconnected' && hasAttempted) {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
       setLoading(false);
       setHasAttempted(false);
-      setError('Connection failed or host disconnected.');
+      setError('Connection failed or host disconnected. Please verify the PIN.');
     }
-  }, [status, navigate, pin, hasAttempted]);
+
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
+  }, [status, navigate, pin, urlPin, hasAttempted]);
 
   const handleJoin = async (pinToJoin: string) => {
     if (pinToJoin.length !== 6 || !/^\d+$/.test(pinToJoin)) {
@@ -40,13 +60,16 @@ const JoinRoom = () => {
       return;
     }
     
+    setPin(pinToJoin);
     setError('');
     setLoading(true);
+    setHasAttempted(true);
     try {
       await initGuest(pinToJoin);
     } catch (err: any) {
-      setError(err || 'Failed to join room');
+      setError(typeof err === 'string' ? err : (err?.message || 'Failed to join room'));
       setLoading(false);
+      setHasAttempted(false);
     }
   };
 
@@ -56,9 +79,10 @@ const JoinRoom = () => {
   };
 
   const handleScan = (detectedCodes: any[]) => {
+    if (loading) return;
     if (detectedCodes && detectedCodes.length > 0) {
-      const scannedVal = detectedCodes[0].rawValue;
-      const match = scannedVal.match(/(?:\/join\/|^)(\d{6})/);
+      const scannedVal = detectedCodes[0].rawValue || '';
+      const match = scannedVal.match(/\/join\/(\d{6})/) || scannedVal.match(/\b(\d{6})\b/);
       if (match) {
         const foundPin = match[1];
         setPin(foundPin);
@@ -96,24 +120,48 @@ const JoinRoom = () => {
                 exit={{ opacity: 0, y: -20 }}
                 className="flex flex-col items-center"
               >
-                <div className="w-full flex justify-between items-center mb-6">
+                <div className="w-full flex justify-between items-center mb-4">
                   <h3 className="font-bold text-slate-900 dark:text-white text-lg">Scan QR Code</h3>
-                  <button 
-                    onClick={() => setIsScanning(false)}
-                    className="p-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-full transition"
-                  >
-                    <X size={20} className="text-slate-600 dark:text-slate-300" />
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setScannerFacing(prev => prev === 'environment' ? 'user' : 'environment')}
+                      className="px-3 py-1.5 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-lg text-xs font-medium text-slate-700 dark:text-slate-300 transition flex items-center gap-1.5"
+                      title="Switch Camera"
+                    >
+                      <RefreshCw size={14} />
+                      <span>{scannerFacing === 'environment' ? 'Rear' : 'Front'}</span>
+                    </button>
+                    <button 
+                      onClick={() => setIsScanning(false)}
+                      className="p-1.5 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-full transition"
+                      aria-label="Close scanner"
+                    >
+                      <X size={18} className="text-slate-600 dark:text-slate-300" />
+                    </button>
+                  </div>
                 </div>
                 
                 <div className="w-full aspect-square bg-slate-900 rounded-2xl overflow-hidden relative shadow-inner border border-slate-200 dark:border-slate-700">
                   <Scanner 
                     onScan={handleScan}
+                    onError={(err) => {
+                      console.warn('QR scanner error:', err);
+                      setError('Camera error: ' + (err?.message || 'Permission denied or camera busy.'));
+                    }}
+                    constraints={{
+                      facingMode: { ideal: scannerFacing }
+                    }}
+                    styles={{
+                      container: { width: '100%', height: '100%' },
+                      video: { width: '100%', height: '100%', objectFit: 'cover' }
+                    }}
                     components={{ zoom: true }}
+                    paused={loading}
                   />
                   <div className="absolute inset-0 pointer-events-none border-[4px] border-emerald-500/50 rounded-2xl z-10 m-8"></div>
                 </div>
-                <p className="text-sm text-slate-500 dark:text-slate-400 mt-6 text-center">
+                <p className="text-sm text-slate-500 dark:text-slate-400 mt-4 text-center">
                   Point your camera at the host's QR code to connect automatically.
                 </p>
               </motion.div>

@@ -37,17 +37,22 @@ function generatePIN() {
 io.on('connection', (socket) => {
   console.log(`Socket connected: ${socket.id}`);
 
-  // Host creates a room
+  // Host creates or reconnects to a room
   socket.on('create-room', ({ peerId, existingPin }, callback) => {
     const pin = existingPin || generatePIN();
+    const existingRoom = rooms.get(pin);
+    if (existingRoom && existingRoom.disconnectTimeout) {
+      clearTimeout(existingRoom.disconnectTimeout);
+    }
+
     rooms.set(pin, {
       hostSocketId: socket.id,
       peerId: peerId, // Host's PeerJS ID
-      createdAt: Date.now()
+      createdAt: existingRoom ? existingRoom.createdAt : Date.now()
     });
     
     socket.join(pin);
-    console.log(`Room ${pin} created by ${socket.id} (PeerID: ${peerId})`);
+    console.log(`Room ${pin} active for host ${socket.id} (PeerID: ${peerId})`);
     
     if (callback) {
       callback({ success: true, pin });
@@ -61,25 +66,12 @@ io.on('connection', (socket) => {
       socket.join(pin);
       console.log(`User ${socket.id} (PeerID: ${peerId}) joined room ${pin}`);
       
-      // Notify the host that a guest is joining, providing the guest's PeerJS ID
-      // so they can initiate the connection (or vice-versa, PeerJS makes it easy).
-      // Actually, with PeerJS, the guest can just connect to the host's peerId directly!
-      
       if (callback) {
         callback({ success: true, hostPeerId: room.peerId });
       }
 
-      // We can also notify the host
+      // Notify the host that guest joined with their PeerJS ID
       socket.to(room.hostSocketId).emit('guest-joined', { guestPeerId: peerId });
-
-      // After successful exchange, we can delete the room from signaling server 
-      // as they will use WebRTC DataChannels directly.
-      // Let's delay deletion slightly to allow connection to establish
-      setTimeout(() => {
-        rooms.delete(pin);
-        console.log(`Room ${pin} removed from signaling server.`);
-      }, 5000);
-
     } else {
       if (callback) callback({ success: false, error: 'Invalid PIN or room expired' });
     }
@@ -87,11 +79,15 @@ io.on('connection', (socket) => {
 
   socket.on('disconnect', () => {
     console.log(`Socket disconnected: ${socket.id}`);
-    // Cleanup any rooms hosted by this socket
+    // Provide a 60-second grace period for mobile users switching apps (e.g. sharing link via WhatsApp)
     for (const [pin, room] of rooms.entries()) {
       if (room.hostSocketId === socket.id) {
-        rooms.delete(pin);
-        console.log(`Room ${pin} deleted due to host disconnect.`);
+        room.disconnectTimeout = setTimeout(() => {
+          if (rooms.get(pin)?.hostSocketId === socket.id) {
+            rooms.delete(pin);
+            console.log(`Room ${pin} deleted after 60s host disconnect grace period.`);
+          }
+        }, 60000);
       }
     }
   });

@@ -553,11 +553,11 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const initHost = async () => {
-    if (!managerRef.current) return '';
+    const manager = managerRef.current || initManager();
     try {
       setMessages([]);
       setRole('host');
-      const generatedPin = await managerRef.current.createRoom();
+      const generatedPin = await manager.createRoom();
       setPin(generatedPin);
       return generatedPin;
     } catch (e) {
@@ -567,12 +567,12 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const initGuest = async (roomPin: string) => {
-    if (!managerRef.current) return;
+    const manager = managerRef.current || initManager();
     try {
       setMessages([]);
       setRole('guest');
       setPin(roomPin);
-      await managerRef.current.joinRoom(roomPin);
+      await manager.joinRoom(roomPin);
     } catch (e) {
       setPin(null);
       setRole(null);
