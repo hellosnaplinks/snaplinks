@@ -26,8 +26,7 @@ const ChatRoom = () => {
   const { 
     messages, status, sendMessage, sendFile, disconnect, deleteMessage, 
     isPeerTyping, sendTypingState, localStream, remoteStream, callStatus, callType,
-    isAudioMuted, isVideoMuted, isScreenSharing,
-    canSwitchCamera, isMobileDevice, facingMode,
+    isAudioMuted, isVideoMuted, isScreenSharing, facingMode,
     toggleAudio, toggleVideo, toggleScreenShare, switchCamera,
     startCall, answerCall, rejectCall, terminateCall 
   } = useChat();
@@ -453,6 +452,18 @@ const ChatRoom = () => {
                     <span className="text-[9px]">Camera Off</span>
                   </div>
                 )}
+                {/* Mobile Flip Camera shortcut on corner preview */}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    switchCamera();
+                  }}
+                  title="Flip Camera"
+                  className="lg:hidden absolute top-1.5 left-1.5 p-1 rounded-full bg-black/60 hover:bg-black/80 text-white backdrop-blur-xs transition z-20 flex items-center justify-center shadow-md active:scale-90"
+                >
+                  <RefreshCw size={11} />
+                </button>
                 <div className="absolute bottom-1 right-1.5 px-1.5 py-0.5 rounded bg-black/70 backdrop-blur-xs text-[9px] text-slate-200 font-medium tracking-wide">
                   {isSwapped ? 'Peer' : `You ${isAudioMuted ? '(Muted)' : ''}`}
                 </div>
@@ -491,33 +502,29 @@ const ChatRoom = () => {
                 {isVideoMuted ? <VideoOff size={18} /> : <Video size={18} />}
               </button>
 
-              {/* Switch / Flip Camera (MOBILE ONLY - strictly hidden on laptop/desktop) */}
-              {canSwitchCamera && (
-                <button
-                  type="button"
-                  onClick={switchCamera}
-                  title="Switch Camera (Front / Back)"
-                  className="p-2 sm:p-2.5 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-white transition active:scale-95 flex items-center justify-center shrink-0"
-                >
-                  <RefreshCw size={18} />
-                </button>
-              )}
+              {/* Switch / Flip Camera (MOBILE ONLY - always present on mobile, strictly hidden on laptop/desktop via lg:hidden) */}
+              <button
+                type="button"
+                onClick={switchCamera}
+                title="Switch Camera (Front / Back)"
+                className="lg:hidden p-2 sm:p-2.5 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-white transition active:scale-95 flex items-center justify-center shrink-0"
+              >
+                <RefreshCw size={18} />
+              </button>
 
-              {/* Screen Share (Desktop / Laptop only - strictly hidden on mobile) */}
-              {!isMobileDevice && (
-                <button
-                  type="button"
-                  onClick={toggleScreenShare}
-                  title={isScreenSharing ? "Stop Sharing Screen" : "Share Screen"}
-                  className={`p-2 sm:p-2.5 rounded-xl transition flex items-center justify-center shrink-0 ${
-                    isScreenSharing 
-                      ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30' 
-                      : 'bg-slate-800/90 hover:bg-slate-700 text-white'
-                  }`}
-                >
-                  <Monitor size={18} />
-                </button>
-              )}
+              {/* Screen Share (Desktop / Laptop only - strictly hidden on mobile via hidden lg:flex) */}
+              <button
+                type="button"
+                onClick={toggleScreenShare}
+                title={isScreenSharing ? "Stop Sharing Screen" : "Share Screen"}
+                className={`hidden lg:flex p-2 sm:p-2.5 rounded-xl transition items-center justify-center shrink-0 ${
+                  isScreenSharing 
+                    ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30' 
+                    : 'bg-slate-800/90 hover:bg-slate-700 text-white'
+                }`}
+              >
+                <Monitor size={18} />
+              </button>
 
               {/* End Call */}
               <button
