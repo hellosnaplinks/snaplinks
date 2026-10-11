@@ -374,8 +374,8 @@ const ChatRoom = () => {
               <span>End-to-End Encrypted</span>
             </div>
 
-            {/* TOP-RIGHT OVERLAY: Inset Self PiP Video */}
-            <div className="absolute top-3 sm:top-4 right-3 sm:right-4 z-20 w-28 sm:w-40 md:w-48 aspect-[4/3] rounded-2xl overflow-hidden border-2 border-slate-700/80 shadow-2xl bg-slate-950 relative group">
+            {/* BOTTOM-RIGHT OVERLAY: Inset Self PiP Video ("Our Video") */}
+            <div className="absolute bottom-20 md:bottom-6 right-3 sm:right-4 md:right-6 z-20 w-24 sm:w-36 md:w-48 aspect-[3/4] sm:aspect-[4/3] rounded-2xl overflow-hidden border-2 border-slate-700/80 shadow-2xl bg-slate-950 relative group transition-all">
               <video 
                 ref={(el) => {
                   localVideoRef.current = el;
@@ -462,7 +462,7 @@ const ChatRoom = () => {
         {/* ======================================================== */}
         <div className={`flex flex-col bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl overflow-hidden relative ${
           isVideoCallActive 
-            ? `${mobileTab === 'video' ? 'hidden lg:flex' : 'flex-1 min-h-0 lg:flex-none lg:w-[420px] xl:w-[480px] h-full'} shrink-0` 
+            ? `${mobileTab === 'video' ? 'hidden lg:flex' : 'flex-1 min-h-0 lg:flex-none lg:w-[420px] xl:w-[480px] h-full'} lg:shrink-0` 
             : 'w-full h-full'
         }`}>
 
