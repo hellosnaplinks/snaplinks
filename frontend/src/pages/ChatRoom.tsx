@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Send, Paperclip, Lock, LogOut, FileIcon, Mic, MicOff, Square, 
   Check, CheckCheck, Trash2, Reply, X, Phone, Video, VideoOff, 
-  PhoneOff, Monitor, MessageSquare, RefreshCw 
+  PhoneOff, Monitor, MessageSquare, RefreshCw, Maximize2, Minimize2 
 } from 'lucide-react';
 import { useChat } from '../context/ChatContext';
 import { useDropzone } from 'react-dropzone';
@@ -46,6 +46,7 @@ const ChatRoom = () => {
   const remoteAudioRef = useRef<HTMLAudioElement>(null);
 
   const [showMobileChat, setShowMobileChat] = useState(false);
+  const [videoFit, setVideoFit] = useState<'contain' | 'cover'>('contain');
   const [wasConnected, setWasConnected] = useState(false);
 
   useEffect(() => {
@@ -302,7 +303,7 @@ const ChatRoom = () => {
                 }}
                 autoPlay 
                 playsInline 
-                className="w-full h-full object-cover"
+                className={`w-full h-full ${videoFit === 'contain' ? 'object-contain' : 'object-cover'} transition-all duration-200`}
               />
 
               {/* Fallback / Connecting State */}
@@ -334,11 +335,22 @@ const ChatRoom = () => {
               </div>
             </div>
 
-            {/* TOP-RIGHT/CENTER OVERLAY: Room PIN & Encryption */}
-            <div className="absolute top-3 sm:top-4 right-3 md:right-auto md:left-1/2 md:-translate-x-1/2 z-20 flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-1 sm:py-1.5 bg-slate-900/80 backdrop-blur-md border border-slate-700/60 rounded-full text-[10px] sm:text-xs font-medium text-slate-300 shadow-lg">
-              <span>PIN: <strong className="font-mono text-emerald-400">{pin}</strong></span>
-              <span className="hidden sm:inline text-slate-500">&bull;</span>
-              <span className="hidden sm:inline">Encrypted</span>
+            {/* TOP-RIGHT/CENTER OVERLAY: Room PIN & Encryption + Full View (Fit Screen) Toggle */}
+            <div className="absolute top-3 sm:top-4 right-3 md:right-auto md:left-1/2 md:-translate-x-1/2 z-20 flex items-center gap-1.5 sm:gap-2">
+              <div className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-1 sm:py-1.5 bg-slate-900/80 backdrop-blur-md border border-slate-700/60 rounded-full text-[10px] sm:text-xs font-medium text-slate-300 shadow-lg">
+                <span>PIN: <strong className="font-mono text-emerald-400">{pin}</strong></span>
+                <span className="hidden sm:inline text-slate-500">&bull;</span>
+                <span className="hidden sm:inline">Encrypted</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setVideoFit(prev => prev === 'contain' ? 'cover' : 'contain')}
+                title={videoFit === 'contain' ? "Zoom to Fill Screen" : "Fit Full Screen (Show Entire Screen / No Crop)"}
+                className="flex items-center gap-1 px-2.5 sm:px-3 py-1 sm:py-1.5 bg-slate-900/80 hover:bg-slate-800 backdrop-blur-md border border-slate-700/60 rounded-full text-[10px] sm:text-xs font-medium text-slate-300 shadow-lg transition active:scale-95 cursor-pointer"
+              >
+                {videoFit === 'contain' ? <Maximize2 size={12} className="text-emerald-400" /> : <Minimize2 size={12} />}
+                <span>{videoFit === 'contain' ? 'Full View' : 'Fill'}</span>
+              </button>
             </div>
 
             {/* BOTTOM-RIGHT OVERLAY: WhatsApp Style Inset Self Video ("My Side Video") */}
