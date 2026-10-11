@@ -45,7 +45,7 @@ const ChatRoom = () => {
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteAudioRef = useRef<HTMLAudioElement>(null);
 
-  const [showMobileChat, setShowMobileChat] = useState(false);
+  const [mobileTab, setMobileTab] = useState<'split' | 'video' | 'chat'>('split');
   const [videoFit, setVideoFit] = useState<'contain' | 'cover'>('contain');
   const [wasConnected, setWasConnected] = useState(false);
 
@@ -275,6 +275,47 @@ const ChatRoom = () => {
         </div>
       )}
 
+      {/* MOBILE VIEW SWITCHER (When in video call on mobile) */}
+      {isVideoCallActive && (
+        <div className="flex lg:hidden items-center justify-center gap-1.5 mb-2 shrink-0 z-30">
+          <div className="bg-slate-900/90 backdrop-blur-md border border-slate-800 p-1 rounded-2xl flex items-center gap-1 shadow-lg">
+            <button
+              type="button"
+              onClick={() => setMobileTab('split')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition ${
+                mobileTab === 'split' 
+                  ? 'bg-emerald-500 text-white shadow-md' 
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              Split Screen
+            </button>
+            <button
+              type="button"
+              onClick={() => setMobileTab('video')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition flex items-center gap-1 ${
+                mobileTab === 'video' 
+                  ? 'bg-emerald-500 text-white shadow-md' 
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Video size={13} /> Full Video
+            </button>
+            <button
+              type="button"
+              onClick={() => setMobileTab('chat')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition flex items-center gap-1 ${
+                mobileTab === 'chat' 
+                  ? 'bg-emerald-500 text-white shadow-md' 
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <MessageSquare size={13} /> Full Chat
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* MAIN CONTAINER: Split view if Video Call is active, otherwise centered chat */}
       <div className={`w-full flex-1 min-h-0 h-full mx-auto ${
         isVideoCallActive 
@@ -289,7 +330,11 @@ const ChatRoom = () => {
           <motion.div 
             initial={{ opacity: 0, scale: 0.98 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="flex-1 w-full h-full min-w-0 min-h-0 bg-slate-950 border border-slate-800/80 rounded-3xl shadow-2xl relative overflow-hidden flex flex-col justify-between"
+            className={`min-w-0 bg-slate-950 border border-slate-800/80 rounded-3xl shadow-2xl relative overflow-hidden flex flex-col justify-between ${
+              mobileTab === 'chat' ? 'hidden lg:flex' : 'flex'
+            } ${
+              mobileTab === 'video' ? 'flex-1 w-full h-full' : mobileTab === 'split' ? 'w-full h-[38vh] sm:h-[44vh] shrink-0 lg:flex-1 lg:h-full' : 'flex-1 w-full h-full'
+            }`}
           >
             {/* Main Remote Video (Peer) */}
             <div className="absolute inset-0 w-full h-full bg-slate-950 flex items-center justify-center overflow-hidden">
@@ -359,7 +404,11 @@ const ChatRoom = () => {
                 position: 'absolute',
                 zIndex: 35,
               }}
-              className="bottom-20 right-3 sm:bottom-24 sm:right-4 lg:bottom-6 lg:right-6 w-24 sm:w-28 md:w-36 lg:w-44 aspect-[9/16] rounded-2xl overflow-hidden border-2 border-slate-700/80 shadow-2xl bg-slate-950 group transition-all"
+              className={`${
+                mobileTab === 'split' 
+                  ? 'bottom-16 right-2 w-20' 
+                  : 'bottom-20 right-3 w-24 sm:w-28'
+              } lg:bottom-6 lg:right-6 md:w-36 lg:w-44 aspect-[9/16] rounded-2xl overflow-hidden border-2 border-slate-700/80 shadow-2xl bg-slate-950 group transition-all`}
             >
               <video 
                 ref={(el) => {
@@ -386,13 +435,15 @@ const ChatRoom = () => {
             </div>
 
             {/* BOTTOM-CENTER OVERLAY: Floating Call Controls Dock */}
-            <div className="absolute bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2 sm:py-2.5 bg-slate-900/90 backdrop-blur-xl border border-slate-700/70 rounded-2xl shadow-2xl max-w-[95%]">
+            <div className={`absolute ${
+              mobileTab === 'split' ? 'bottom-2 py-1.5 px-2.5 gap-2' : 'bottom-4 sm:bottom-6 py-2 px-3 sm:px-4 gap-2.5 sm:gap-3'
+            } left-1/2 -translate-x-1/2 z-40 flex items-center bg-slate-900/90 backdrop-blur-xl border border-slate-700/70 rounded-2xl shadow-2xl max-w-[95%]`}>
               {/* Mute Mic */}
               <button
                 type="button"
                 onClick={toggleAudio}
                 title={isAudioMuted ? "Unmute Microphone" : "Mute Microphone"}
-                className={`p-2.5 sm:p-3 rounded-xl transition ${
+                className={`p-2 sm:p-2.5 rounded-xl transition ${
                   isAudioMuted 
                     ? 'bg-red-500/20 text-red-400 border border-red-500/50 hover:bg-red-500/30' 
                     : 'bg-slate-800/90 hover:bg-slate-700 text-white'
@@ -406,7 +457,7 @@ const ChatRoom = () => {
                 type="button"
                 onClick={toggleVideo}
                 title={isVideoMuted ? "Turn Camera On" : "Turn Camera Off"}
-                className={`p-2.5 sm:p-3 rounded-xl transition ${
+                className={`p-2 sm:p-2.5 rounded-xl transition ${
                   isVideoMuted 
                     ? 'bg-red-500/20 text-red-400 border border-red-500/50 hover:bg-red-500/30' 
                     : 'bg-slate-800/90 hover:bg-slate-700 text-white'
@@ -420,17 +471,17 @@ const ChatRoom = () => {
                 type="button"
                 onClick={switchCamera}
                 title="Switch Camera (Front / Back)"
-                className="flex md:hidden p-2.5 sm:p-3 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-white transition active:scale-95 items-center justify-center"
+                className="flex md:hidden p-2 sm:p-2.5 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-white transition active:scale-95 items-center justify-center"
               >
                 <RefreshCw size={18} />
               </button>
 
-              {/* Screen Share / Switch Display (Desktop / Laptop only - hidden on mobile) */}
+              {/* Screen Share (Desktop / Laptop only - hidden on mobile) */}
               <button
                 type="button"
                 onClick={toggleScreenShare}
                 title={isScreenSharing ? "Stop Sharing Screen" : "Share Screen"}
-                className={`hidden md:flex p-2.5 sm:p-3 rounded-xl transition ${
+                className={`hidden md:flex p-2 sm:p-2.5 rounded-xl transition ${
                   isScreenSharing 
                     ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30' 
                     : 'bg-slate-800/90 hover:bg-slate-700 text-white'
@@ -439,27 +490,12 @@ const ChatRoom = () => {
                 <Monitor size={18} />
               </button>
 
-              {/* Open Mobile Chat Drawer */}
-              <button
-                type="button"
-                onClick={() => setShowMobileChat(true)}
-                title="Open Chat"
-                className="flex lg:hidden p-2.5 sm:p-3 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-white transition relative active:scale-95"
-              >
-                <MessageSquare size={18} />
-                {messages.length > 0 && (
-                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-emerald-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center shadow">
-                    {messages.length > 9 ? '9+' : messages.length}
-                  </span>
-                )}
-              </button>
-
               {/* End Call */}
               <button
                 type="button"
                 onClick={terminateCall}
                 title="End Call"
-                className="p-2.5 sm:p-3 px-4 sm:px-5 bg-red-500 hover:bg-red-600 active:scale-95 text-white rounded-xl shadow-lg shadow-red-500/40 transition flex items-center justify-center gap-1.5"
+                className="p-2 sm:p-2.5 px-4 sm:px-5 bg-red-500 hover:bg-red-600 active:scale-95 text-white rounded-xl shadow-lg shadow-red-500/40 transition flex items-center justify-center gap-1.5"
               >
                 <PhoneOff size={18} />
               </button>
@@ -472,13 +508,13 @@ const ChatRoom = () => {
         {/* ======================================================== */}
         <div className={`flex flex-col bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl overflow-hidden relative ${
           isVideoCallActive 
-            ? `${showMobileChat ? 'fixed inset-x-2 inset-y-16 sm:inset-x-4 sm:inset-y-20 z-50 flex' : 'hidden'} lg:flex lg:static lg:inset-auto lg:w-[420px] xl:w-[480px] lg:h-full lg:shrink-0` 
+            ? `${mobileTab === 'video' ? 'hidden lg:flex' : 'flex-1 min-h-0 w-full'} lg:flex-none lg:w-[420px] xl:w-[480px] lg:h-full lg:shrink-0` 
             : 'w-full h-full'
         }`}>
 
-          {/* Mobile In-Call Banner when Chat is Open */}
-          {isVideoCallActive && (
-            <div className="flex lg:hidden items-center justify-between px-4 py-2.5 bg-emerald-600 text-white shrink-0">
+          {/* In-Call Header Banner on Mobile when in Full Chat */}
+          {isVideoCallActive && mobileTab === 'chat' && (
+            <div className="flex lg:hidden items-center justify-between px-4 py-2 bg-emerald-600 text-white shrink-0">
               <div className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
                 <span className="text-xs font-semibold">Video Call in Progress</span>
@@ -494,10 +530,10 @@ const ChatRoom = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setShowMobileChat(false)}
+                  onClick={() => setMobileTab('video')}
                   className="px-3 py-1 bg-white text-emerald-700 hover:bg-slate-100 rounded-lg text-xs font-bold transition flex items-center gap-1.5 shadow"
                 >
-                  <Video size={13} /> Back to Video
+                  <Video size={13} /> Return to Video
                 </button>
               </div>
             </div>
