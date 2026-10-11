@@ -81,9 +81,15 @@ export class PeerManager {
     });
 
     this.peer.on('error', (err: any) => {
-      console.error('Peer error:', err);
+      console.warn('Peer error:', err);
       if (err.type === 'network' || err.type === 'server-error' || err.type === 'socket-error' || err.type === 'socket-closed') {
         console.warn('Ignoring non-fatal signaling error:', err.type);
+        return;
+      }
+      // When target peer is momentarily app-switching, peer-unavailable is emitted.
+      // Don't kill status; let retry loop and reverse connect succeed.
+      if (err.type === 'peer-unavailable') {
+        console.warn('Target peer temporarily unavailable, waiting for retry or host reconnect...');
         return;
       }
       if (!this.connection || !this.connection.open) {
@@ -91,14 +97,47 @@ export class PeerManager {
       }
     });
 
+    // Auto-reconnect PeerJS if mobile browser briefly suspends background connection
+    this.peer.on('disconnected', () => {
+      console.log('PeerJS disconnected from signaling server, attempting reconnect...');
+      if (!this.peer.destroyed) {
+        try {
+          this.peer.reconnect();
+        } catch (e) {
+          console.warn('Peer reconnect failed:', e);
+        }
+      }
+    });
+
     // Handle mobile browser app switching (e.g. going to WhatsApp and coming back)
     this.socket.on('connect', () => {
       console.log('Signaling socket connected:', this.socket.id);
+      if (this.peer && this.peer.disconnected && !this.peer.destroyed) {
+        try { this.peer.reconnect(); } catch (e) {}
+      }
       if (this.role === 'host' && this.currentPin && this.id) {
         console.log(`Re-linking host socket for room ${this.currentPin}`);
         this.socket.emit('create-room', { peerId: this.id, existingPin: this.currentPin });
       }
     });
+
+    // Re-check and resume connections when user brings browser tab back to foreground
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+          console.log('Document became visible, re-checking peer & socket connections...');
+          if (this.peer && this.peer.disconnected && !this.peer.destroyed) {
+            try { this.peer.reconnect(); } catch (e) {}
+          }
+          if (this.socket && this.socket.disconnected) {
+            this.socket.connect();
+          }
+          if (this.role === 'host' && this.currentPin && this.id) {
+            this.socket.emit('create-room', { peerId: this.id, existingPin: this.currentPin });
+          }
+        }
+      });
+    }
   }
 
   // Called by Host
@@ -175,16 +214,16 @@ export class PeerManager {
     });
   }
 
-  private connectToPeer(targetId: string) {
+  private connectToPeer(targetId: string, retryCount = 0) {
     if (this.connection && this.connection.open && this.connection.peer === targetId) {
       return;
     }
     this.onConnectionStatusChange('connecting');
     const conn = this.peer.connect(targetId, { reliable: true });
-    this.setupConnection(conn);
+    this.setupConnection(conn, targetId, retryCount);
   }
 
-  private setupConnection(conn: DataConnection) {
+  private setupConnection(conn: DataConnection, targetId?: string, retryCount = 0) {
     if (this.connection && this.connection.open && this.connection.peer === conn.peer) {
       return;
     }
@@ -202,6 +241,16 @@ export class PeerManager {
 
     conn.on('close', () => {
       console.log('Peer connection closed for:', conn.peer);
+      // If closed before open and we haven't connected yet, retry up to 3 times (e.g. while host is returning from WhatsApp)
+      if (targetId && retryCount < 3 && (!this.connection || !this.connection.open)) {
+        console.log(`Connection to ${targetId} closed before open, retrying (attempt ${retryCount + 1})...`);
+        setTimeout(() => {
+          if (!this.connection || !this.connection.open) {
+            this.connectToPeer(targetId, retryCount + 1);
+          }
+        }, 1500);
+        return;
+      }
       if (this.connection === conn) {
         this.onConnectionStatusChange('disconnected');
         this.connection = null;
@@ -209,7 +258,16 @@ export class PeerManager {
     });
     
     conn.on('error', (err) => {
-      console.error('Connection error:', err);
+      console.warn('Connection error to peer:', conn.peer, err);
+      if (targetId && retryCount < 3 && (!this.connection || !this.connection.open)) {
+        console.log(`Connection to ${targetId} errored, retrying (attempt ${retryCount + 1})...`);
+        setTimeout(() => {
+          if (!this.connection || !this.connection.open) {
+            this.connectToPeer(targetId, retryCount + 1);
+          }
+        }, 1500);
+        return;
+      }
       if (this.connection === conn) {
         this.onConnectionStatusChange('disconnected');
       }

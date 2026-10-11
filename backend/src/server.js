@@ -48,6 +48,8 @@ io.on('connection', (socket) => {
     rooms.set(pin, {
       hostSocketId: socket.id,
       peerId: peerId, // Host's PeerJS ID
+      guestPeerId: existingRoom?.guestPeerId || null,
+      guestSocketId: existingRoom?.guestSocketId || null,
       createdAt: existingRoom ? existingRoom.createdAt : Date.now()
     });
     
@@ -57,12 +59,20 @@ io.on('connection', (socket) => {
     if (callback) {
       callback({ success: true, pin });
     }
+
+    // If guest joined while host was switching apps, notify host immediately upon reconnection
+    if (existingRoom && existingRoom.guestPeerId) {
+      console.log(`Delivering pending guest ${existingRoom.guestPeerId} to reconnected host ${socket.id}`);
+      socket.emit('guest-joined', { guestPeerId: existingRoom.guestPeerId });
+    }
   });
 
   // Guest joins a room
   socket.on('join-room', ({ pin, peerId }, callback) => {
     const room = rooms.get(pin);
     if (room) {
+      room.guestPeerId = peerId;
+      room.guestSocketId = socket.id;
       socket.join(pin);
       console.log(`User ${socket.id} (PeerID: ${peerId}) joined room ${pin}`);
       
