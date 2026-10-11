@@ -181,33 +181,47 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setIsScreenSharing(false);
         setLocalStream(new MediaStream(localStreamRef.current ? localStreamRef.current.getTracks() : []));
       } else {
-        if (!navigator.mediaDevices?.getDisplayMedia) {
-          await switchCamera();
+        if (!navigator.mediaDevices || typeof navigator.mediaDevices.getDisplayMedia !== 'function') {
+          alert('Screen sharing is not supported by your mobile browser (such as iOS Safari). Mobile operating systems restrict web browsers from recording the screen for privacy. Please use a laptop or desktop computer to share your screen, or use Switch Camera.');
           return;
         }
-        const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
-        screenStreamRef.current = screenStream;
-        const screenTrack = screenStream.getVideoTracks()[0];
-        screenTrack.onended = () => {
-          toggleScreenShare();
-        };
-        if (localStreamRef.current) {
-          const oldTrack = localStreamRef.current.getVideoTracks()[0];
-          if (oldTrack) {
-            localStreamRef.current.removeTrack(oldTrack);
-            oldTrack.stop();
+        try {
+          const screenStream = await navigator.mediaDevices.getDisplayMedia({ 
+            video: true,
+            audio: false 
+          });
+          screenStreamRef.current = screenStream;
+          const screenTrack = screenStream.getVideoTracks()[0];
+          screenTrack.onended = () => {
+            toggleScreenShare();
+          };
+          if (localStreamRef.current) {
+            const oldTrack = localStreamRef.current.getVideoTracks()[0];
+            if (oldTrack) {
+              localStreamRef.current.removeTrack(oldTrack);
+              oldTrack.stop();
+            }
+            localStreamRef.current.addTrack(screenTrack);
           }
-          localStreamRef.current.addTrack(screenTrack);
+          const sender = currentCallRef.current?.peerConnection?.getSenders()?.find((s: any) => s.track?.kind === 'video');
+          if (sender) {
+            await sender.replaceTrack(screenTrack);
+          }
+          setIsScreenSharing(true);
+          setLocalStream(new MediaStream(localStreamRef.current ? localStreamRef.current.getTracks() : []));
+        } catch (err: any) {
+          if (err.name === 'NotAllowedError') {
+            console.log('Screen sharing request was cancelled by user');
+          } else if (err.name === 'NotSupportedError') {
+            alert('Screen sharing is not supported on this mobile device.');
+          } else {
+            console.warn('Screen share error:', err);
+            alert('Screen share error: ' + (err.message || 'Permission denied or not supported on this browser.'));
+          }
         }
-        const sender = currentCallRef.current?.peerConnection?.getSenders()?.find((s: any) => s.track?.kind === 'video');
-        if (sender) {
-          await sender.replaceTrack(screenTrack);
-        }
-        setIsScreenSharing(true);
-        setLocalStream(new MediaStream(localStreamRef.current ? localStreamRef.current.getTracks() : []));
       }
     } catch (err: any) {
-      console.warn('Screen share cancelled/error:', err);
+      console.warn('Screen share toggle error:', err);
     }
   };
 

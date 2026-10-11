@@ -413,12 +413,12 @@ const ChatRoom = () => {
                 <RefreshCw size={18} />
               </button>
 
-              {/* Screen Share / Switch Display (Desktop / Tablet) */}
+              {/* Screen Share / Switch Display */}
               <button
                 type="button"
                 onClick={toggleScreenShare}
                 title={isScreenSharing ? "Stop Sharing Screen" : "Share Screen"}
-                className={`hidden sm:flex p-2.5 sm:p-3 rounded-xl transition ${
+                className={`p-2.5 sm:p-3 rounded-xl transition ${
                   isScreenSharing 
                     ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30' 
                     : 'bg-slate-800/90 hover:bg-slate-700 text-white'
