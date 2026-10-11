@@ -374,8 +374,8 @@ const ChatRoom = () => {
               <span>End-to-End Encrypted</span>
             </div>
 
-            {/* BOTTOM-RIGHT OVERLAY: Inset Self PiP Video ("Our Video") */}
-            <div className="absolute bottom-20 md:bottom-6 right-3 sm:right-4 md:right-6 z-20 w-24 sm:w-36 md:w-48 aspect-[3/4] sm:aspect-[4/3] rounded-2xl overflow-hidden border-2 border-slate-700/80 shadow-2xl bg-slate-950 relative group transition-all">
+            {/* BOTTOM-RIGHT OVERLAY: WhatsApp Style Inset Self Video ("My Side Video") */}
+            <div className="absolute bottom-20 sm:bottom-24 md:bottom-6 right-3 sm:right-4 md:right-6 z-30 w-24 sm:w-32 md:w-36 lg:w-40 aspect-[9/16] rounded-2xl overflow-hidden border-2 border-slate-700/80 shadow-2xl bg-slate-950 group transition-all">
               <video 
                 ref={(el) => {
                   localVideoRef.current = el;
@@ -392,10 +392,10 @@ const ChatRoom = () => {
               {isVideoMuted && (
                 <div className="absolute inset-0 bg-slate-950/85 backdrop-blur-xs flex flex-col items-center justify-center text-slate-400 text-xs gap-1">
                   <VideoOff size={18} />
-                  <span className="text-[10px]">Camera Off</span>
+                  <span className="text-[9px]">Camera Off</span>
                 </div>
               )}
-              <div className="absolute bottom-1 right-1.5 px-1.5 py-0.5 rounded bg-black/60 backdrop-blur-xs text-[9px] text-slate-300 font-medium">
+              <div className="absolute bottom-1 right-1.5 px-1.5 py-0.5 rounded bg-black/70 backdrop-blur-xs text-[9px] text-slate-200 font-medium tracking-wide">
                 You {isAudioMuted ? '(Muted)' : ''}
               </div>
             </div>
