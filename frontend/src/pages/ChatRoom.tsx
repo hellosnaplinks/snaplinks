@@ -415,12 +415,12 @@ const ChatRoom = () => {
                 {isVideoMuted ? <VideoOff size={18} /> : <Video size={18} />}
               </button>
 
-              {/* Switch Camera */}
+              {/* Switch / Flip Camera (MOBILE ONLY - hidden on laptop/desktop) */}
               <button
                 type="button"
                 onClick={switchCamera}
                 title="Switch Camera (Front / Back)"
-                className="p-2.5 sm:p-3 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-white transition active:scale-95"
+                className="flex md:hidden p-2.5 sm:p-3 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-white transition active:scale-95 items-center justify-center"
               >
                 <RefreshCw size={18} />
               </button>
