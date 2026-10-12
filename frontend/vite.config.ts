@@ -8,7 +8,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['logo-icon.jpg'],
+      includeAssets: ['favicon.png', 'favicon.ico'],
       workbox: {
         skipWaiting: true,
         clientsClaim: true
@@ -22,19 +22,19 @@ export default defineConfig({
         display: 'standalone',
         icons: [
           {
-            src: '/logo-icon.jpg',
+            src: '/favicon.png',
             sizes: '192x192',
-            type: 'image/jpeg'
+            type: 'image/png'
           },
           {
-            src: '/logo-icon.jpg',
+            src: '/favicon.png',
             sizes: '512x512',
-            type: 'image/jpeg'
+            type: 'image/png'
           },
           {
-            src: '/logo-icon.jpg',
+            src: '/favicon.png',
             sizes: '512x512',
-            type: 'image/jpeg',
+            type: 'image/png',
             purpose: 'any maskable'
           }
         ]
